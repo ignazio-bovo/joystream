@@ -823,6 +823,9 @@ decl_module! {
             // check that channel assets are 0
             ensure!(channel.num_assets > 0, Error::<T>::ChannelContainsAssets);
 
+            // remove channel from on chain state
+            ChannelById::<T>::remove(channel_id);
+
             // deposit event
             Self::deposit_event(RawEvent::ChannelDeleted(actor, channel_id));
 
