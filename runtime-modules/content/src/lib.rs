@@ -803,11 +803,26 @@ decl_module! {
         // extrinsics for channel deletion
         #[weight = 10_000_000] // TODO: adjust weight
         pub fn delete_channel(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _channel_id: T::ChannelId,
+            origin,
+            actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
+            channel_id: T::ChannelId,
         ) {
-            Self::not_implemented()?;
+            // check that channel exists
+            let channel = Self::ensure_channel_exists(&channel_id)?;
+
+            // ensure permissions
+            ensure_actor_authorized_to_update_channel::<T>(
+                origin,
+                &actor,
+                &channel.owner,
+            )?;
+
+            // check that channel videos are 0
+            ensure!(channel.num_videos > 0, Error::<T>::ChannelContainsVideos);
+
+            // check that channel assets are 0
+            ensure!(channel.num_assets > 0, Error::<T>::ChannelContainsAssets);
+
         }
 
         /// Remove assets of a channel from storage

@@ -69,5 +69,13 @@ decl_error! {
 
         /// Channel assets feasibility
         InvalidAssetsProvided,
+
+        /// Channel cannot be deleted because it contains videos
+        ChannelContainsVideos,
+
+        /// Channel cannot be deleted because it contains assets
+        ChannelContainsAssets,
+
+
     }
 }
