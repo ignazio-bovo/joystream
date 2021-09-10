@@ -818,10 +818,10 @@ decl_module! {
             )?;
 
             // check that channel videos are 0
-            ensure!(channel.num_videos > 0, Error::<T>::ChannelContainsVideos);
+            ensure!(channel.num_videos == 0, Error::<T>::ChannelContainsVideos);
 
             // check that channel assets are 0
-            ensure!(channel.num_assets > 0, Error::<T>::ChannelContainsAssets);
+            ensure!(channel.num_assets == 0, Error::<T>::ChannelContainsAssets);
 
             // remove channel from on chain state
             ChannelById::<T>::remove(channel_id);
