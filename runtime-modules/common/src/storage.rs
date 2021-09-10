@@ -16,16 +16,15 @@ pub struct ContentParameters<ContentId, DataObjectTypeId> {
 // New owner type for storage object struct
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, Debug)]
-pub enum StorageObjectOwner<MemberId, ChannelId, DAOId> {
+pub enum StorageObjectOwner<MemberId, ChannelId> {
     Member(MemberId),
     Channel(ChannelId), // acts through content directory module, where again DAOs can own channels for example
     #[allow(clippy::upper_case_acronyms)]
-    DAO(DAOId), // acts through upcoming `content_finance` module
-    Council,            // acts through proposal frame_system
+    Council, // acts through proposal frame_system
     WorkingGroup(WorkingGroup), // acts through new extrinsic in working group
 }
 
-impl<MemberId, ChannelId, DAOId> Default for StorageObjectOwner<MemberId, ChannelId, DAOId> {
+impl<MemberId, ChannelId> Default for StorageObjectOwner<MemberId, ChannelId> {
     fn default() -> Self {
         Self::Council
     }
@@ -34,24 +33,24 @@ impl<MemberId, ChannelId, DAOId> Default for StorageObjectOwner<MemberId, Channe
 // Defined in 'common' package
 pub trait StorageSystem<T: crate::StorageOwnership + crate::MembershipTypes> {
     fn atomically_add_content(
-        owner: StorageObjectOwner<T::MemberId, T::ChannelId, T::DAOId>,
+        owner: StorageObjectOwner<T::MemberId, T::ChannelId>,
         content_parameters: Vec<ContentParameters<T::ContentId, T::DataObjectTypeId>>,
     ) -> DispatchResult;
 
     // Checks if given owner can add provided content to the storage frame_system
     fn can_add_content(
-        owner: StorageObjectOwner<T::MemberId, T::ChannelId, T::DAOId>,
+        owner: StorageObjectOwner<T::MemberId, T::ChannelId>,
         content_parameters: Vec<ContentParameters<T::ContentId, T::DataObjectTypeId>>,
     ) -> DispatchResult;
 
     fn atomically_remove_content(
-        owner: &StorageObjectOwner<T::MemberId, T::ChannelId, T::DAOId>,
+        owner: &StorageObjectOwner<T::MemberId, T::ChannelId>,
         content_ids: &[T::ContentId],
     ) -> DispatchResult;
 
     // Checks if given owner can remove content under given content ids from the storage frame_system
     fn can_remove_content(
-        owner: &StorageObjectOwner<T::MemberId, T::ChannelId, T::DAOId>,
+        owner: &StorageObjectOwner<T::MemberId, T::ChannelId>,
         content_ids: &[T::ContentId],
     ) -> DispatchResult;
 }
