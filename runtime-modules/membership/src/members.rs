@@ -220,10 +220,10 @@ decl_event! {
       <T as system::Trait>::AccountId,
       <T as Trait>::MemberId,
       <T as Trait>::ActorId, {
-        MemberRegistered(MemberId, AccountId),
-        MemberUpdatedAboutText(MemberId),
-        MemberUpdatedAvatar(MemberId),
-        MemberUpdatedHandle(MemberId),
+        MemberRegistered(MemberId, AccountId, UserInfo),
+        MemberUpdatedAboutText(MemberId, Vec<u8>),
+        MemberUpdatedAvatar(MemberId, Vec<u8>),
+        MemberUpdatedHandle(MemberId, Vec<u8>),
         MemberSetRootAccount(MemberId, AccountId),
         MemberSetControllerAccount(MemberId, AccountId),
         MemberRegisteredRole(MemberId, ActorInRole<ActorId>),
@@ -248,7 +248,7 @@ decl_module! {
             // ensure enough free balance to cover terms fees
             ensure!(T::Currency::can_slash(&who, terms.fee), "not enough balance to buy membership");
 
-            let user_info = Self::check_user_registration_info(user_info)?;
+            let user_info = Self::check_user_registration_info(user_info.clone())?;
 
             // ensure handle is not already registered
             Self::ensure_unique_handle(&user_info.handle)?;
@@ -256,7 +256,7 @@ decl_module! {
             let _ = T::Currency::slash(&who, terms.fee);
             let member_id = Self::insert_member(&who, &user_info, EntryMethod::Paid(paid_terms_id));
 
-            Self::deposit_event(RawEvent::MemberRegistered(member_id, who));
+            Self::deposit_event(RawEvent::MemberRegistered(member_id, who, user_info));
         }
 
         /// Change member's about text
@@ -371,14 +371,14 @@ decl_module! {
             // make sure we are accepting new memberships
             ensure!(Self::new_memberships_allowed(), "new members not allowed");
 
-            let user_info = Self::check_user_registration_info(user_info)?;
+            let user_info = Self::check_user_registration_info(user_info.clone())?;
 
             // ensure handle is not already registered
             Self::ensure_unique_handle(&user_info.handle)?;
 
             let member_id = Self::insert_member(&new_member_account, &user_info, EntryMethod::Screening(sender));
 
-            Self::deposit_event(RawEvent::MemberRegistered(member_id, new_member_account));
+            Self::deposit_event(RawEvent::MemberRegistered(member_id, new_member_account, user_info));
         }
 
         pub fn set_screening_authority(origin, authority: T::AccountId) {
@@ -541,8 +541,8 @@ impl<T: Trait> Module<T> {
     fn _change_member_about_text(id: T::MemberId, text: &[u8]) -> dispatch::Result {
         let mut profile = Self::ensure_profile(id)?;
         let text = Self::validate_text(text);
-        profile.about = text;
-        Self::deposit_event(RawEvent::MemberUpdatedAboutText(id));
+        profile.about = text.clone();
+        Self::deposit_event(RawEvent::MemberUpdatedAboutText(id, text.into_vec()));
         <MemberProfile<T>>::insert(id, profile);
         Ok(())
     }
@@ -551,7 +551,7 @@ impl<T: Trait> Module<T> {
         let mut profile = Self::ensure_profile(id)?;
         Self::validate_avatar(uri)?;
         profile.avatar_uri = uri.to_owned();
-        Self::deposit_event(RawEvent::MemberUpdatedAvatar(id));
+        Self::deposit_event(RawEvent::MemberUpdatedAvatar(id, uri.into_vec()));
         <MemberProfile<T>>::insert(id, profile);
         Ok(())
     }
@@ -562,8 +562,8 @@ impl<T: Trait> Module<T> {
         Self::ensure_unique_handle(&handle)?;
         <Handles<T>>::remove(&profile.handle);
         <Handles<T>>::insert(handle.clone(), id);
-        profile.handle = handle;
-        Self::deposit_event(RawEvent::MemberUpdatedHandle(id));
+        profile.handle = handle.clone();
+        Self::deposit_event(RawEvent::MemberUpdatedHandle(id, handle));
         <MemberProfile<T>>::insert(id, profile);
         Ok(())
     }
