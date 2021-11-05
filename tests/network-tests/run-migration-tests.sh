@@ -19,8 +19,8 @@ RUNTIME=${RUNTIME:=sumer}
 TARGET_RUNTIME=${TARGET_RUNTIME:=latest}
 
 # scenarios
-post_migration_scenario=post_migration
-pre_migration_scenario=pre_migration
+POST_MIGRATION_SCENARIO=post_migration
+PRE_MIGRATION_SCENARIO=pre_migration
 
 mkdir -p ${DATA_PATH}
 
