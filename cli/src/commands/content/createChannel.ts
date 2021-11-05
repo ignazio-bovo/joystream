@@ -21,7 +21,7 @@ export default class CreateChannelCommand extends UploadCommandBase {
     }),
   }
 
-  async run() {
+  async run()  {
     let { context, input } = this.parse(CreateChannelCommand).flags
 
     // Context
