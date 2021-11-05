@@ -15,7 +15,7 @@ ALICE_INITIAL_BALANCE=${ALICE_INITIAL_BALANCE:=100000000}
 
 # The docker image tag to use for joystream/node as the starting chain
 # that will be upgraded to the latest runtime.
-RUNTIME=${RUNTIME:=latest}
+RUNTIME=${RUNTIME:=sumer}
 TARGET_RUNTIME=${TARGET_RUNTIME:=latest}
 
 # scenarios
