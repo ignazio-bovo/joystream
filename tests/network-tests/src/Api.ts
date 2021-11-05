@@ -1730,9 +1730,10 @@ export class Api {
     }
 
     public sudoCreateChannel(
-	actor: ContentActor,
 	parameters: ChannelCreationParameters,
     ): Promise<ISubmittableResult> {
+        const memberId = (this.getMemberIds("Alice"))[0] // alice should be root
+	const actor = this.api.createType('ContentActor', { Member: memberId })	
 	return this.makeSudoCall(this.api.tx.content.createChannel(actor, parameters))
     }
 
@@ -1741,7 +1742,8 @@ export class Api {
 	channel_id: IChannelId,
 	parameters: VideoCreationParameters,
     ): Promise<ISubmittableResult> {
+	
 	return this.makeSudoCall(this.api.tx.content.createVideo(actor, channel_id, parameters))
-    }    
+    }
     
 }
