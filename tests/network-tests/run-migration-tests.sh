@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 set -e
 
@@ -20,8 +19,8 @@ RUNTIME=${RUNTIME:=latest}
 TARGET_RUNTIME=${TARGET_RUNTIME:=latest}
 
 # scenarios
-post_migration_scenario={$post_migration_scenario:=post_migration}
-pre_migration_scenario={$pre_migration_scenario:=pre_migration}
+post_migration_scenario=post_migration
+pre_migration_scenario=pre_migration
 
 mkdir -p ${DATA_PATH}
 
@@ -102,11 +101,7 @@ else
 
     # setup post migration scenario
     time DEBUG=integration-tests* yarn workspace network-tests node-ts-strict src/scenarios/${POST_MIGRATION_SCENARIO}.ts
-    
 
-    echo "Performing migration tests"
-    ./run-migration-tests.sh $1
-    echo "Done with migrations tests"
 fi
 
 # Display runtime version
