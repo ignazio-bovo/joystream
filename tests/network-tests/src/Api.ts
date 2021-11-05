@@ -12,8 +12,14 @@ import {
     OpeningPolicyCommitment,
     Opening as WorkingGroupOpening,
 } from '@joystream/types/working-group'
-import { Channel, Video, VideoId } from '@joystream/types/content'
-import { ChannelId } from '@joystream/types/common'
+import { Channel,
+	 Video,
+	 VideoId,
+	 ContentActor,
+	 ChannelCreationParameters,
+	 VideoCreationParameters,
+       } from '@joystream/types/content'
+import { IChannelId } from '@joystream/types/common'
 import { ElectionStake, Seat } from '@joystream/types/council'
 import { AccountInfo, Balance, BalanceOf, BlockNumber, EventRecord } from '@polkadot/types/interfaces'
 import BN from 'bn.js'
@@ -1715,11 +1721,27 @@ export class Api {
     
     // CONTENT MODULE
     
-    public async getChannelById(id: ChannelId): Promise<Channel> {
+    public async getChannelById(id: IChannelId): Promise<Channel> {
 	return await this.api.query.content.channelById<Channel>(id)
     }
 
-    public async getVideoById(id: ChannelId): Promise<Video> {
+    public async getVideoById(id: VideoId): Promise<Video> {
 	return await this.api.query.content.videoById<Video>(id)
     }
+
+    public sudoCreateChannel(
+	actor: ContentActor,
+	parameters: ChannelCreationParameters,
+    ): Promise<ISubmittableResult> {
+	return this.makeSudoCall(this.api.tx.content.createChannel(actor, parameters))
+    }
+
+    public sudoCreateVideo(
+	actor: ContentActor,
+	channel_id: IChannelId,
+	parameters: VideoCreationParameters,
+    ): Promise<ISubmittableResult> {
+	return this.makeSudoCall(this.api.tx.content.createVideo(actor, channel_id, parameters))
+    }    
+    
 }
