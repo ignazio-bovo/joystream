@@ -1,7 +1,9 @@
 import { BaseFixture } from '../Fixture'
 import { Api } from '../Api'
-import { createTypeFromConstructor } from '@joystream/sumer-types'
-import { ChannelCreationParameters } from '@joystream/types/content'
+import {
+    createTypeFromConstructor,
+    ChannelCreationParameters,
+} from '@joystream/sumer-types/content'
 import { assert } from 'chai'
 
 
