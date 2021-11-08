@@ -1725,6 +1725,15 @@ export class Api {
 	return await this.api.query.content.channelById<Channel>(id)
     }
 
+    public async getNextChannelId(): Promise<IChannelId> {
+	return await this.api.query.content.nextChannelId()
+    }
+
+    public async getNextVideoId(): Promise<VideoId> {
+	return await this.api.query.content.nextVideoId()
+    }    
+    
+
     public async getVideoById(id: VideoId): Promise<Video> {
 	return await this.api.query.content.videoById<Video>(id)
     }

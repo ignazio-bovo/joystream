@@ -1,31 +1,34 @@
 import { BaseFixture } from '../Fixture'
-import { BuyMembershipHappyCaseFixture } from './membershipModule'
 import { Api } from '../Api'
-import { OpeningId } from '@joystream/types/hiring'
-import { PaidTermId } from '@joystream/types/members'
 import { createTypeFromConstructor } from '@joystream/sumer-types'
 import { ChannelCreationParameters } from '@joystream/types/content'
+import { assert } from 'chai'
 
 
 export class SudoCreateContent extends BaseFixture {
-    
+
     constructor(
-	api: Api,
+        api: Api,
     ) {
-	super(api)
+        super(api)
     }
 
     public async execute(): Promise<void> {
 
-	// channel creation parameters
-	const channelCreationParameters = createTypeFromConstructor(ChannelCreationParameters, {
-	    assets: null,
-	    meta: null,
-	})
+        // channel creation parameters
+        const channelCreationParameters = createTypeFromConstructor(ChannelCreationParameters, {
+            assets: null,
+            meta: null,
+        })
 
-	// create channel as sudo account (Alice)
-	this.api.sudoCreateChannel(channelCreationParameters)
+        // get next channel id
+        const next_channel_id = await this.api.getNextChannelId();
 
-	// assert number of outstanding channels > 0
+        // create channel as sudo account (Alice)
+        this.api.sudoCreateChannel(channelCreationParameters);
+
+        // assert number of outstanding channels > 0
+        assert(this.api.getChannelById(next_channel_id) !== null);
+
     }
 }
