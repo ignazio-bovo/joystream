@@ -355,15 +355,6 @@ impl Trait for Test {
     /// Type of identifier for Channel Categories
     type ChannelCategoryId = u64;
 
-    /// Type of identifier for Playlists
-    type PlaylistId = u64;
-
-    /// Type of identifier for Persons
-    type PersonId = u64;
-
-    /// Type of identifier for Channels
-    type SeriesId = u64;
-
     /// Type of identifier for Channel transfer requests
     type ChannelOwnershipTransferRequestId = u64;
 
@@ -382,9 +373,6 @@ pub struct ExtBuilder {
     next_channel_id: u64,
     next_video_category_id: u64,
     next_video_id: u64,
-    next_playlist_id: u64,
-    next_person_id: u64,
-    next_series_id: u64,
     next_channel_transfer_request_id: u64,
     next_curator_group_id: u64,
 }
@@ -396,9 +384,6 @@ impl Default for ExtBuilder {
             next_channel_id: 1,
             next_video_category_id: 1,
             next_video_id: 1,
-            next_playlist_id: 1,
-            next_person_id: 1,
-            next_series_id: 1,
             next_channel_transfer_request_id: 1,
             next_curator_group_id: 1,
         }
@@ -416,9 +401,6 @@ impl ExtBuilder {
             next_channel_id: self.next_channel_id,
             next_video_category_id: self.next_video_category_id,
             next_video_id: self.next_video_id,
-            next_playlist_id: self.next_playlist_id,
-            next_person_id: self.next_person_id,
-            next_series_id: self.next_series_id,
             next_channel_transfer_request_id: self.next_channel_transfer_request_id,
             next_curator_group_id: self.next_curator_group_id,
         }

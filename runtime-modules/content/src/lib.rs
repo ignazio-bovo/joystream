@@ -84,15 +84,6 @@ pub trait Trait:
     /// Type of identifier for Channel Categories
     type ChannelCategoryId: NumericIdentifier;
 
-    /// Type of identifier for Playlists
-    type PlaylistId: NumericIdentifier;
-
-    /// Type of identifier for Persons
-    type PersonId: NumericIdentifier;
-
-    /// Type of identifier for Channels
-    type SeriesId: NumericIdentifier;
-
     /// Type of identifier for Channel transfer requests
     type ChannelOwnershipTransferRequestId: NumericIdentifier;
 
@@ -313,150 +304,14 @@ type VideoUpdateParameters<T> = VideoUpdateParametersRecord<StorageAssets<T>, Da
 /// A video which belongs to a channel. A video may be part of a series or playlist.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct VideoRecord<ChannelId, SeriesId> {
+pub struct VideoRecord<ChannelId> {
+    /// channel the video is in
     pub in_channel: ChannelId,
-    // keep track of which season the video is in if it is an 'episode'
-    // - prevent removing a video if it is in a season (because order is important)
-    pub in_series: Option<SeriesId>,
     /// Whether the curators have censored the video or not.
     pub is_censored: bool,
 }
 
-type Video<T> = VideoRecord<<T as storage::Trait>::ChannelId, <T as Trait>::SeriesId>;
-
-/// Information about the plyalist being created.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct PlaylistCreationParameters {
-    /// Metadata about the playlist.
-    meta: Vec<u8>,
-}
-
-/// Information about the playlist being updated.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct PlaylistUpdateParameters {
-    // It is the only field so its not an Option
-    /// Metadata update for the playlist.
-    new_meta: Vec<u8>,
-}
-
-/// A playlist is an ordered collection of videos.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct Playlist<ChannelId> {
-    /// The channel the playlist belongs to.
-    in_channel: ChannelId,
-}
-
-/// Information about the episode being created or updated.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
-pub enum EpisodeParameters<VideoId, StorageAssets> {
-    /// A new video is being added as the episode.
-    NewVideo(VideoCreationParametersRecord<StorageAssets>),
-    /// An existing video is being made into an episode.
-    ExistingVideo(VideoId),
-}
-
-/// Information about the season being created or updated.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct SeasonParameters<VideoId, StorageAssets> {
-    /// Season assets referenced by metadata
-    assets: Option<StorageAssets>,
-    // ?? It might just be more straighforward to always provide full list of episodes at cost of larger tx.
-    /// If set, updates the episodes of a season. Extends the number of episodes in a season
-    /// when length of new_episodes is greater than previously set. Last elements must all be
-    /// 'Some' in that case.
-    /// Will truncate existing season when length of new_episodes is less than previously set.
-    episodes: Option<Vec<Option<EpisodeParameters<VideoId, StorageAssets>>>>,
-
-    meta: Option<Vec<u8>>,
-}
-
-/// Information about the series being created or updated.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct SeriesParameters<VideoId, StorageAssets> {
-    /// Series assets referenced by metadata
-    assets: Option<StorageAssets>,
-    // ?? It might just be more straighforward to always provide full list of seasons at cost of larger tx.
-    /// If set, updates the seasons of a series. Extend a series when length of seasons is
-    /// greater than previoulsy set. Last elements must all be 'Some' in that case.
-    /// Will truncate existing series when length of seasons is less than previously set.
-    seasons: Option<Vec<Option<SeasonParameters<VideoId, StorageAssets>>>>,
-    meta: Option<Vec<u8>>,
-}
-
-/// A season is an ordered list of videos (episodes).
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct Season<VideoId> {
-    episodes: Vec<VideoId>,
-}
-
-/// A series is an ordered list of seasons that belongs to a channel.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct Series<ChannelId, VideoId> {
-    in_channel: ChannelId,
-    seasons: Vec<Season<VideoId>>,
-}
-
-/// The actor the caller/origin is trying to act as for Person creation and update and delete calls.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
-pub enum PersonActor<MemberId, CuratorId> {
-    Member(MemberId),
-    Curator(CuratorId),
-}
-
-/// The authorized actor that may update or delete a Person.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
-pub enum PersonController<MemberId> {
-    /// Member controls the person
-    Member(MemberId),
-    /// Any curator controls the person
-    Curators,
-}
-
-/// Default trait implemented only because its used in Person which needs to implement a Default trait
-/// since it is a StorageValue.
-impl<MemberId: Default> Default for PersonController<MemberId> {
-    fn default() -> Self {
-        PersonController::Member(MemberId::default())
-    }
-}
-
-/// Information for Person being created.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
-pub struct PersonCreationParameters<StorageAssets> {
-    /// Assets referenced by metadata
-    assets: StorageAssets,
-    /// Metadata for person.
-    meta: Vec<u8>,
-}
-
-/// Information for Persion being updated.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct PersonUpdateParameters<StorageAssets> {
-    /// Assets referenced by metadata
-    assets: Option<StorageAssets>,
-    /// Metadata to update person.
-    new_meta: Option<Vec<u8>>,
-}
-
-/// A Person represents a real person that may be associated with a video.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, Debug)]
-pub struct Person<MemberId> {
-    /// Who can update or delete this person.
-    controlled_by: PersonController<MemberId>,
-}
+type Video<T> = VideoRecord<<T as storage::Trait>::ChannelId>;
 
 type DataObjectId<T> = <T as storage::Trait>::DataObjectId;
 
@@ -470,12 +325,6 @@ decl_storage! {
 
         pub VideoCategoryById get(fn video_category_by_id): map hasher(blake2_128_concat) T::VideoCategoryId => VideoCategory;
 
-        pub PlaylistById get(fn playlist_by_id): map hasher(blake2_128_concat) T::PlaylistId => Playlist<T::ChannelId>;
-
-        pub SeriesById get(fn series_by_id): map hasher(blake2_128_concat) T::SeriesId => Series<T::ChannelId, T::VideoId>;
-
-        pub PersonById get(fn person_by_id): map hasher(blake2_128_concat) T::PersonId => Person<T::MemberId>;
-
         pub ChannelOwnershipTransferRequestById get(fn channel_ownership_transfer_request_by_id):
             map hasher(blake2_128_concat) T::ChannelOwnershipTransferRequestId => ChannelOwnershipTransferRequest<T>;
 
@@ -486,12 +335,6 @@ decl_storage! {
         pub NextVideoCategoryId get(fn next_video_category_id) config(): T::VideoCategoryId;
 
         pub NextVideoId get(fn next_video_id) config(): T::VideoId;
-
-        pub NextPlaylistId get(fn next_playlist_id) config(): T::PlaylistId;
-
-        pub NextPersonId get(fn next_person_id) config(): T::PersonId;
-
-        pub NextSeriesId get(fn next_series_id) config(): T::SeriesId;
 
         pub NextChannelOwnershipTransferRequestId get(fn next_channel_transfer_request_id) config(): T::ChannelOwnershipTransferRequestId;
 
@@ -914,34 +757,6 @@ decl_module! {
             Self::deposit_event(RawEvent::ChannelCategoryDeleted(actor, category_id));
         }
 
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn request_channel_transfer(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _request: ChannelOwnershipTransferRequest<T>,
-        ) {
-            // requester must be new_owner
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn cancel_channel_transfer_request(
-            _origin,
-            _request_id: T::ChannelOwnershipTransferRequestId,
-        ) {
-            // origin must be original requester (ie. proposed new channel owner)
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn accept_channel_transfer(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _request_id: T::ChannelOwnershipTransferRequestId,
-        ) {
-            // only current owner of channel can approve
-            Self::not_implemented()?;
-        }
 
         #[weight = 10_000_000] // TODO: adjust weight
         pub fn create_video(
@@ -979,10 +794,8 @@ decl_module! {
 
             // create the video struct
             let video: Video<T> = VideoRecord {
+                /// channel the video is in
                 in_channel: channel_id,
-                // keep track of which season the video is in if it is an 'episode'
-                // - prevent removing a video if it is in a season (because order is important)
-                in_series: None,
                 /// Whether the curators have censored the video or not.
                 is_censored: false,
             };
@@ -1066,8 +879,8 @@ decl_module! {
                 &channel,
             )?;
 
-            // ensure video can be removed
-            Self::ensure_video_can_be_removed(&video)?;
+            // remove specified assets from channel bag in storage
+            Self::remove_assets_from_storage(&assets_to_remove, &channel_id, &channel.deletion_prize_source_account_id)?;
 
             //
             // == MUTATION SAFE ==
@@ -1087,35 +900,6 @@ decl_module! {
             Self::deposit_event(RawEvent::VideoDeleted(actor, video_id));
         }
 
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn create_playlist(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _channel_id: T::ChannelId,
-            _params: PlaylistCreationParameters,
-        ) {
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn update_playlist(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _playlist: T::PlaylistId,
-            _params: PlaylistUpdateParameters,
-        ) {
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn delete_playlist(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _channel_id: T::ChannelId,
-            _playlist: T::PlaylistId,
-        ) {
-            Self::not_implemented()?;
-        }
 
         #[weight = 10_000_000] // TODO: adjust weight
         pub fn set_featured_videos(
@@ -1195,52 +979,6 @@ decl_module! {
             Self::deposit_event(RawEvent::VideoCategoryDeleted(actor, category_id));
         }
 
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn create_person(
-            _origin,
-            _actor: PersonActor<T::MemberId, T::CuratorId>,
-            _params: PersonCreationParameters<StorageAssets<T>>,
-        ) {
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn update_person(
-            _origin,
-            _actor: PersonActor<T::MemberId, T::CuratorId>,
-            _person: T::PersonId,
-            _params: PersonUpdateParameters<StorageAssets<T>>,
-        ) {
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn delete_person(
-            _origin,
-            _actor: PersonActor<T::MemberId, T::CuratorId>,
-            _person: T::PersonId,
-        ) {
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn add_person_to_video(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _video_id: T::VideoId,
-            _person: T::PersonId
-        ) {
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn remove_person_from_video(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _video_id: T::VideoId
-        ) {
-            Self::not_implemented()?;
-        }
 
         #[weight = 10_000_000] // TODO: adjust weight
         pub fn update_video_censorship_status(
@@ -1276,34 +1014,6 @@ decl_module! {
             Self::deposit_event(RawEvent::VideoCensorshipStatusUpdated(actor, video_id, is_censored, rationale));
         }
 
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn create_series(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _channel_id: T::ChannelId,
-            _params: SeriesParameters<T::VideoId, StorageAssets<T>>
-        ) {
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn update_series(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _channel_id: T::ChannelId,
-            _params: SeriesParameters<T::VideoId, StorageAssets<T>>
-        ) {
-            Self::not_implemented()?;
-        }
-
-        #[weight = 10_000_000] // TODO: adjust weight
-        pub fn delete_series(
-            _origin,
-            _actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
-            _series: T::SeriesId,
-        ) {
-            Self::not_implemented()?;
-        }
     }
 }
 
@@ -1341,12 +1051,6 @@ impl<T: Trait> Module<T> {
             Error::<T>::VideoDoesNotExist
         );
         Ok(VideoById::<T>::get(video_id))
-    }
-
-    // Ensure given video is not in season
-    fn ensure_video_can_be_removed(video: &Video<T>) -> DispatchResult {
-        ensure!(video.in_series.is_none(), Error::<T>::VideoInSeason);
-        Ok(())
     }
 
     fn ensure_channel_category_exists(
@@ -1410,10 +1114,6 @@ impl<T: Trait> Module<T> {
         BagIdType::from(dyn_bag)
     }
 
-    fn not_implemented() -> DispatchResult {
-        Err(Error::<T>::FeatureNotImplemented.into())
-    }
-
     fn upload_assets_to_storage(
         assets: &StorageAssets<T>,
         channel_id: &T::ChannelId,
@@ -1470,11 +1170,7 @@ decl_event!(
         ChannelId = <T as storage::Trait>::ChannelId,
         ChannelCategoryId = <T as Trait>::ChannelCategoryId,
         ChannelOwnershipTransferRequestId = <T as Trait>::ChannelOwnershipTransferRequestId,
-        PlaylistId = <T as Trait>::PlaylistId,
-        SeriesId = <T as Trait>::SeriesId,
-        PersonId = <T as Trait>::PersonId,
         ChannelOwnershipTransferRequest = ChannelOwnershipTransferRequest<T>,
-        Series = Series<<T as storage::Trait>::ChannelId, <T as Trait>::VideoId>,
         Channel = Channel<T>,
         DataObjectId = DataObjectId<T>,
         IsCensored = bool,
@@ -1482,7 +1178,6 @@ decl_event!(
         ChannelUpdateParameters = ChannelUpdateParameters<T>,
         VideoCreationParameters = VideoCreationParameters<T>,
         VideoUpdateParameters = VideoUpdateParameters<T>,
-        StorageAssets = StorageAssets<T>,
     {
         // Curators
         CuratorGroupCreated(CuratorGroupId),
@@ -1547,42 +1242,6 @@ decl_event!(
         // Featured Videos
         FeaturedVideosSet(ContentActor, Vec<VideoId>),
 
-        // Video Playlists
-        PlaylistCreated(ContentActor, PlaylistId, PlaylistCreationParameters),
-        PlaylistUpdated(ContentActor, PlaylistId, PlaylistUpdateParameters),
-        PlaylistDeleted(ContentActor, PlaylistId),
-
-        // Series
-        SeriesCreated(
-            ContentActor,
-            SeriesId,
-            StorageAssets,
-            SeriesParameters<VideoId, StorageAssets>,
-            Series,
-        ),
-        SeriesUpdated(
-            ContentActor,
-            SeriesId,
-            StorageAssets,
-            SeriesParameters<VideoId, StorageAssets>,
-            Series,
-        ),
-        SeriesDeleted(ContentActor, SeriesId),
-
-        // Persons
-        PersonCreated(
-            ContentActor,
-            PersonId,
-            StorageAssets,
-            PersonCreationParameters<StorageAssets>,
-        ),
-        PersonUpdated(
-            ContentActor,
-            PersonId,
-            StorageAssets,
-            PersonUpdateParameters<StorageAssets>,
-        ),
-        PersonDeleted(ContentActor, PersonId),
         ChannelDeleted(ContentActor, ChannelId),
     }
 );
