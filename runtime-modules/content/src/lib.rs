@@ -634,12 +634,13 @@ decl_module! {
                     Error::<T>::InvalidBagSizeSpecified
                 );
 
+                // construct collection of assets to be removed
+                let assets_to_remove = T::DataObjectStorage::get_data_objects_id(&bag_id);
+
                 //
                 // == MUTATION SAFE ==
                 //
 
-                // construct collection of assets to be removed
-                let assets_to_remove = T::DataObjectStorage::get_data_objects_id(&bag_id);
 
                 // remove specified assets from storage
                 Self::remove_assets_from_storage(
@@ -878,9 +879,6 @@ decl_module! {
                 &actor,
                 &channel,
             )?;
-
-            // remove specified assets from channel bag in storage
-            Self::remove_assets_from_storage(&assets_to_remove, &channel_id, &channel.deletion_prize_source_account_id)?;
 
             //
             // == MUTATION SAFE ==
