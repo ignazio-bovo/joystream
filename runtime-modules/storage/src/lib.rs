@@ -227,7 +227,13 @@ pub trait DataObjectStorage<T: Trait> {
         bag_id: &DynamicBagId<T>,
         deletion_prize: &Option<DynamicBagDeletionPrize<T>>,
         params: &UploadParameters<T>,
-    ) -> DispatchResult;
+    ) -> Result<
+        (
+            BTreeSet<T::StorageBucketId>,
+            BTreeSet<DistributionBucketId<T>>,
+        ),
+        DispatchError,
+    >;
 
     /// Checks if a bag does exists and returns it. Static Always exists
     fn ensure_bag_exists(bag_id: &BagId<T>) -> Result<Bag<T>, DispatchError>;
@@ -2633,7 +2639,15 @@ impl<T: Trait> DataObjectStorage<T> for Module<T> {
         // == MUTATION SAFE ==
         //
 
-        Self::create_dynamic_bag_inner(&dynamic_bag_id, &deletion_prize)?;
+        let (storage_bucket_ids, distribution_bucket_ids) =
+            Self::pick_buckets_for_bag(&dynamic_bag_id);
+
+        Self::create_dynamic_bag_inner(
+            &dynamic_bag_id,
+            &deletion_prize,
+            &storage_bucket_ids,
+            &distribution_bucket_ids,
+        )?;
         Ok(())
     }
 
@@ -2642,8 +2656,14 @@ impl<T: Trait> DataObjectStorage<T> for Module<T> {
         deletion_prize: Option<DynamicBagDeletionPrize<T>>,
         params: UploadParameters<T>,
     ) -> DispatchResult {
-        Self::can_create_dynamic_bag_with_objects(&dynamic_bag_id, &deletion_prize, &params)?;
-        Self::create_dynamic_bag_inner(&dynamic_bag_id, &deletion_prize)?;
+        let (storage_bucket_ids, distribution_bucket_ids) =
+            Self::can_create_dynamic_bag_with_objects(&dynamic_bag_id, &deletion_prize, &params)?;
+        Self::create_dynamic_bag_inner(
+            &dynamic_bag_id,
+            &deletion_prize,
+            &storage_bucket_ids,
+            &distribution_bucket_ids,
+        )?;
         Ok(())
     }
 
@@ -2658,7 +2678,13 @@ impl<T: Trait> DataObjectStorage<T> for Module<T> {
         bag_id: &DynamicBagId<T>,
         deletion_prize: &Option<DynamicBagDeletionPrize<T>>,
         params: &UploadParameters<T>,
-    ) -> DispatchResult {
+    ) -> Result<
+        (
+            BTreeSet<T::StorageBucketId>,
+            BTreeSet<DistributionBucketId<T>>,
+        ),
+        DispatchError,
+    > {
         Self::can_create_dynamic_bag(bag_id, deletion_prize)?;
         Self::check_global_uploading_block()?;
 
@@ -2672,7 +2698,10 @@ impl<T: Trait> DataObjectStorage<T> for Module<T> {
             &params.expected_data_size_fee,
         )?;
 
-        Ok(())
+        let (storage_bucket_ids, distribution_bucket_ids) = Self::pick_buckets_for_bag(bag_id);
+        Self::ensure_storage_buckets_large_enough(&storage_bucket_ids, &bag_change)?;
+
+        Ok((storage_bucket_ids, distribution_bucket_ids))
     }
 
     fn ensure_bag_exists(bag_id: &BagId<T>) -> Result<Bag<T>, DispatchError> {
@@ -2687,23 +2716,47 @@ impl<T: Trait> DataObjectStorage<T> for Module<T> {
 }
 
 impl<T: Trait> Module<T> {
+    // ensure that storage bucket can hold the bag
+    fn ensure_storage_buckets_large_enough(
+        storage_bucket_ids: &BTreeSet<T::StorageBucketId>,
+        bag_change: &BagUpdate<BalanceOf<T>>,
+    ) -> DispatchResult {
+        ensure!(
+            storage_bucket_ids.iter().all(|id| {
+                let bucket = Self::storage_bucket_by_id(id);
+                bucket.voucher.objects_limit
+                    < bucket.voucher.objects_used + bag_change.voucher_update.objects_number
+            }),
+            Error::<T>::VoucherMaxObjectNumberLimitExceeded
+        );
+
+        ensure!(
+            storage_bucket_ids.iter().all(|id| {
+                let bucket = Self::storage_bucket_by_id(id);
+                bucket.voucher.size_limit
+                    < bucket.voucher.size_used + bag_change.voucher_update.objects_total_size
+            }),
+            Error::<T>::VoucherMaxObjectSizeLimitExceeded
+        );
+
+        // ensures: voucher updates
+        Ok(())
+    }
+
     // dynamic bag creation logic
     fn create_dynamic_bag_inner(
         dynamic_bag_id: &DynamicBagId<T>,
         deletion_prize: &Option<DynamicBagDeletionPrize<T>>,
+        storage_buckets: &BTreeSet<T::StorageBucketId>,
+        distribution_buckets: &BTreeSet<DistributionBucketId<T>>,
     ) -> DispatchResult {
-        if let Some(deletion_prize) = deletion_prize.clone() {
-            <StorageTreasury<T>>::deposit(&deletion_prize.account_id, deletion_prize.prize)?;
-        }
-
         //
         // = MUTATION SAFE =
         //
 
-        let bag_type: DynamicBagType = dynamic_bag_id.clone().into();
-
-        let storage_buckets = Self::pick_storage_buckets_for_dynamic_bag(bag_type);
-        let distribution_buckets = Self::pick_distribution_buckets_for_dynamic_bag(bag_type);
+        if let Some(deletion_prize) = deletion_prize.clone() {
+            <StorageTreasury<T>>::deposit(&deletion_prize.account_id, deletion_prize.prize)?;
+        }
 
         let bag = Bag::<T> {
             stored_by: storage_buckets.clone(),
@@ -2719,8 +2772,8 @@ impl<T: Trait> Module<T> {
         Self::deposit_event(RawEvent::DynamicBagCreated(
             dynamic_bag_id.clone(),
             deletion_prize.clone(),
-            storage_buckets,
-            distribution_buckets,
+            storage_buckets.clone(),
+            distribution_buckets.clone(),
         ));
 
         Ok(())
@@ -3323,6 +3376,21 @@ impl<T: Trait> Module<T> {
             Error::<T>::MaxDataObjectSizeExceeded
         );
         Ok(())
+    }
+
+    // pick bucket for bag
+    fn pick_buckets_for_bag(
+        dynamic_bag_id: &DynamicBagId<T>,
+    ) -> (
+        BTreeSet<T::StorageBucketId>,
+        BTreeSet<DistributionBucketId<T>>,
+    ) {
+        let bag_type: DynamicBagType = dynamic_bag_id.clone().into();
+
+        (
+            Self::pick_storage_buckets_for_dynamic_bag(bag_type),
+            Self::pick_distribution_buckets_for_dynamic_bag(bag_type),
+        )
     }
 
     // Iterates through buckets in the bag. Verifies voucher parameters to fit the new limits:

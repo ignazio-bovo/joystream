@@ -1498,7 +1498,7 @@ impl<T: Trait> Module<T> {
         };
 
         // create dynamic bag if it doesn't exist (does not emits conflicting created/deleted bag events)
-        if let Err(_) = Storage::<T>::ensure_bag_exists(&bag_id) {
+        if Storage::<T>::ensure_bag_exists(&bag_id).is_err() {
             Storage::<T>::create_dynamic_bag_with_objects(dyn_bag, None, upload_params.clone())?;
         };
 
