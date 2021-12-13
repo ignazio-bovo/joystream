@@ -1082,10 +1082,47 @@ impl UpdateStorageBucketsVoucherMaxLimitsFixture {
 pub struct CreateDynamicBagFixture {
     bag_id: DynamicBagId<Test>,
     deletion_prize: Option<DynamicBagDeletionPrize<Test>>,
-    upload_parameters: UploadParameters<Test>,
 }
 
 impl CreateDynamicBagFixture {
+    pub fn default() -> Self {
+        Self {
+            bag_id: Default::default(),
+            deletion_prize: Default::default(),
+        }
+    }
+
+    pub fn with_bag_id(self, bag_id: DynamicBagId<Test>) -> Self {
+        Self { bag_id, ..self }
+    }
+
+    pub fn with_deletion_prize(self, deletion_prize: DynamicBagDeletionPrize<Test>) -> Self {
+        Self {
+            deletion_prize: Some(deletion_prize),
+            ..self
+        }
+    }
+
+    pub fn call_and_assert(&self, expected_result: DispatchResult) {
+        let actual_result =
+            Storage::create_dynamic_bag(self.bag_id.clone(), self.deletion_prize.clone());
+
+        assert_eq!(actual_result, expected_result);
+
+        if actual_result.is_ok() {
+            let bag_id: BagId<Test> = self.bag_id.clone().into();
+            assert!(<crate::Bags<Test>>::contains_key(&bag_id));
+        }
+    }
+}
+
+pub struct CreateDynamicBagWithObjectsFixture {
+    bag_id: DynamicBagId<Test>,
+    deletion_prize: Option<DynamicBagDeletionPrize<Test>>,
+    upload_parameters: UploadParameters<Test>,
+}
+
+impl CreateDynamicBagWithObjectsFixture {
     pub fn default() -> Self {
         Self {
             bag_id: Default::default(),
@@ -1113,14 +1150,28 @@ impl CreateDynamicBagFixture {
     }
 
     pub fn call_and_assert(&self, expected_result: DispatchResult) {
-        let actual_result =
-            Storage::create_dynamic_bag(self.bag_id.clone(), self.deletion_prize.clone());
+        let checker_result = Storage::can_create_dynamic_bag_with_objects(
+            &self.bag_id,
+            &self.deletion_prize,
+            &self.upload_parameters,
+        );
+        let actual_result = Storage::create_dynamic_bag_with_objects(
+            self.bag_id.clone(),
+            self.deletion_prize.clone(),
+            self.upload_parameters.clone(),
+        );
 
         assert_eq!(actual_result, expected_result);
 
         if actual_result.is_ok() {
             let bag_id: BagId<Test> = self.bag_id.clone().into();
             assert!(<crate::Bags<Test>>::contains_key(&bag_id));
+            assert!(checker_result.map_or(false, |pair| pair.0.iter().all(|id| {
+                Storage::ensure_storage_bucket_exists(id).map_or(false, |bucket| {
+                    bucket.voucher.objects_limit >= bucket.voucher.objects_used
+                        && bucket.voucher.size_limit >= bucket.voucher.size_used
+                })
+            })));
         }
     }
 }

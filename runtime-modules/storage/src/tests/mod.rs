@@ -5007,3 +5007,82 @@ fn set_distribution_bucket_family_metadata_fails_with_invalid_distribution_bucke
             ));
     });
 }
+
+#[test]
+fn create_dynamic_bag_with_objects_succeeds() {
+    build_test_externalities().execute_with(|| {
+        let starting_block = 1;
+        run_to_block(starting_block);
+
+        let dynamic_bag_id = DynamicBagId::<Test>::Member(DEFAULT_MEMBER_ID);
+
+        create_storage_buckets(10);
+
+        let deletion_prize_value = 100;
+        let deletion_prize_account_id = DEFAULT_MEMBER_ACCOUNT_ID;
+        let initial_balance = 10000;
+        increase_account_balance(&deletion_prize_account_id, initial_balance);
+
+        let deletion_prize = DynamicBagDeletionPrize::<Test> {
+            prize: deletion_prize_value,
+            account_id: deletion_prize_account_id,
+        };
+
+        let upload_parameters = UploadParameters::<Test> {
+            bag_id: BagId::<Test>::from(dynamic_bag_id.clone()),
+            object_creation_list: create_single_data_object(),
+            deletion_prize_source_account_id: DEFAULT_MEMBER_ACCOUNT_ID,
+            expected_data_size_fee: Storage::data_object_per_mega_byte_fee(),
+        };
+
+        // pre-check balances
+        assert_eq!(
+            Balances::usable_balance(&DEFAULT_MEMBER_ACCOUNT_ID),
+            initial_balance
+        );
+        assert_eq!(
+            Balances::usable_balance(&<StorageTreasury<Test>>::module_account_id()),
+            0
+        );
+
+        CreateDynamicBagWithObjectsFixture::default()
+            .with_bag_id(dynamic_bag_id.clone())
+            .with_deletion_prize(deletion_prize.clone())
+            .with_objects(upload_parameters)
+            .call_and_assert(Ok(()));
+
+        let bag = Storage::dynamic_bag(&dynamic_bag_id);
+
+        // Check that IDs are within possible range.
+        assert!(bag
+            .stored_by
+            .iter()
+            .all(|id| { *id < Storage::next_storage_bucket_id() }));
+
+        let creation_policy =
+            Storage::get_dynamic_bag_creation_policy(dynamic_bag_id.clone().into());
+        assert_eq!(
+            bag.stored_by.len(),
+            creation_policy.number_of_storage_buckets as usize
+        );
+
+        assert_eq!(bag.deletion_prize.unwrap(), deletion_prize_value);
+
+        // post-check balances
+        assert_eq!(
+            Balances::usable_balance(&DEFAULT_MEMBER_ACCOUNT_ID),
+            initial_balance - deletion_prize_value
+        );
+        assert_eq!(
+            Balances::usable_balance(&<StorageTreasury<Test>>::module_account_id()),
+            deletion_prize_value
+        );
+
+        EventFixture::assert_last_crate_event(RawEvent::DynamicBagCreated(
+            dynamic_bag_id,
+            Some(deletion_prize),
+            BTreeSet::from_iter(bag.stored_by),
+            BTreeSet::from_iter(bag.distributed_by),
+        ));
+    });
+}
