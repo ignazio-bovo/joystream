@@ -227,13 +227,7 @@ pub trait DataObjectStorage<T: Trait> {
         bag_id: &DynamicBagId<T>,
         deletion_prize: &Option<DynamicBagDeletionPrize<T>>,
         params: &UploadParameters<T>,
-    ) -> Result<
-        (
-            BTreeSet<T::StorageBucketId>,
-            BTreeSet<DistributionBucketId<T>>,
-        ),
-        DispatchError,
-    >;
+    ) -> Result<BucketPair<T>, DispatchError>;
 
     /// Checks if a bag does exists and returns it. Static Always exists
     fn ensure_bag_exists(bag_id: &BagId<T>) -> Result<Bag<T>, DispatchError>;
@@ -488,6 +482,12 @@ pub type WorkerId<T> = <T as common::MembershipTypes>::ActorId;
 
 /// Balance alias for `balances` module.
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
+
+/// Type alias for the storage & distribution bucket ids pair
+pub type BucketPair<T> = (
+    BTreeSet<<T as Trait>::StorageBucketId>,
+    BTreeSet<DistributionBucketId<T>>,
+);
 
 /// The fundamental concept in the system, which represents single static binary object in the
 /// system. The main goal of the system is to retain an index of all such objects, including who
@@ -2640,7 +2640,7 @@ impl<T: Trait> DataObjectStorage<T> for Module<T> {
         //
 
         let (storage_bucket_ids, distribution_bucket_ids) =
-            Self::pick_buckets_for_bag(&dynamic_bag_id);
+            Self::pick_buckets_for_bag(dynamic_bag_id.clone(), None);
 
         Self::create_dynamic_bag_inner(
             &dynamic_bag_id,
@@ -2678,13 +2678,7 @@ impl<T: Trait> DataObjectStorage<T> for Module<T> {
         bag_id: &DynamicBagId<T>,
         deletion_prize: &Option<DynamicBagDeletionPrize<T>>,
         params: &UploadParameters<T>,
-    ) -> Result<
-        (
-            BTreeSet<T::StorageBucketId>,
-            BTreeSet<DistributionBucketId<T>>,
-        ),
-        DispatchError,
-    > {
+    ) -> Result<BucketPair<T>, DispatchError> {
         Self::can_create_dynamic_bag(bag_id, deletion_prize)?;
         Self::check_global_uploading_block()?;
 
@@ -2698,8 +2692,14 @@ impl<T: Trait> DataObjectStorage<T> for Module<T> {
             &params.expected_data_size_fee,
         )?;
 
-        let (storage_bucket_ids, distribution_bucket_ids) = Self::pick_buckets_for_bag(bag_id);
-        Self::ensure_storage_buckets_large_enough(&storage_bucket_ids, &bag_change)?;
+        let (storage_bucket_ids, distribution_bucket_ids) =
+            Self::pick_buckets_for_bag(bag_id.clone(), Some(bag_change.voucher_update));
+
+        // check if storage buckets have been found
+        ensure!(
+            !storage_bucket_ids.is_empty(),
+            Error::<T>::StorageBucketIdCollectionsAreEmpty
+        );
 
         Ok((storage_bucket_ids, distribution_bucket_ids))
     }
@@ -2716,33 +2716,6 @@ impl<T: Trait> DataObjectStorage<T> for Module<T> {
 }
 
 impl<T: Trait> Module<T> {
-    // ensure that storage bucket can hold the bag
-    fn ensure_storage_buckets_large_enough(
-        storage_bucket_ids: &BTreeSet<T::StorageBucketId>,
-        bag_change: &BagUpdate<BalanceOf<T>>,
-    ) -> DispatchResult {
-        ensure!(
-            storage_bucket_ids.iter().all(|id| {
-                let bucket = Self::storage_bucket_by_id(id);
-                bucket.voucher.objects_limit
-                    < bucket.voucher.objects_used + bag_change.voucher_update.objects_number
-            }),
-            Error::<T>::VoucherMaxObjectNumberLimitExceeded
-        );
-
-        ensure!(
-            storage_bucket_ids.iter().all(|id| {
-                let bucket = Self::storage_bucket_by_id(id);
-                bucket.voucher.size_limit
-                    < bucket.voucher.size_used + bag_change.voucher_update.objects_total_size
-            }),
-            Error::<T>::VoucherMaxObjectSizeLimitExceeded
-        );
-
-        // ensures: voucher updates
-        Ok(())
-    }
-
     // dynamic bag creation logic
     fn create_dynamic_bag_inner(
         dynamic_bag_id: &DynamicBagId<T>,
@@ -3380,15 +3353,16 @@ impl<T: Trait> Module<T> {
 
     // pick bucket for bag
     fn pick_buckets_for_bag(
-        dynamic_bag_id: &DynamicBagId<T>,
+        dynamic_bag_id: DynamicBagId<T>,
+        voucher_update: Option<VoucherUpdate>,
     ) -> (
         BTreeSet<T::StorageBucketId>,
         BTreeSet<DistributionBucketId<T>>,
     ) {
-        let bag_type: DynamicBagType = dynamic_bag_id.clone().into();
+        let bag_type: DynamicBagType = dynamic_bag_id.into();
 
         (
-            Self::pick_storage_buckets_for_dynamic_bag(bag_type),
+            Self::pick_storage_buckets_for_dynamic_bag(bag_type, voucher_update),
             Self::pick_distribution_buckets_for_dynamic_bag(bag_type),
         )
     }
@@ -3457,8 +3431,9 @@ impl<T: Trait> Module<T> {
     // Selects storage bucket ID sets to assign to the dynamic bag.
     pub(crate) fn pick_storage_buckets_for_dynamic_bag(
         bag_type: DynamicBagType,
+        voucher_update: Option<VoucherUpdate>,
     ) -> BTreeSet<T::StorageBucketId> {
-        StorageBucketPicker::<T>::pick_storage_buckets(bag_type)
+        StorageBucketPicker::<T>::pick_storage_buckets(bag_type, voucher_update)
     }
 
     // Selects distributed bucket ID sets to assign to the dynamic bag.

@@ -702,7 +702,7 @@ fn channel_creation_doesnt_live_bags_dangling() {
                 meta: Some(vec![]),
                 reward_account: None,
             },
-            Err(storage::Error::<Test>::MaxDataObjectSizeExceeded.into()),
+            Err(storage::Error::<Test>::StorageBucketIdCollectionsAreEmpty.into()),
         );
 
         // ensure that no bag are left dangling

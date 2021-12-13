@@ -3161,20 +3161,23 @@ fn test_storage_bucket_picking_for_bag_non_random() {
 
         let initial_buckets_number = InitialStorageBucketsNumberForDynamicBag::get();
         // No buckets
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
         assert_eq!(bucket_ids, BTreeSet::new());
 
         // Less then initial buckets number
         let buckets_number = initial_buckets_number - 1;
         let created_buckets = create_storage_buckets(buckets_number);
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
 
         assert_eq!(bucket_ids, created_buckets);
 
         // More then initial buckets number
         let buckets_number = 5;
         create_storage_buckets(buckets_number);
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
 
         assert_eq!(
             bucket_ids,
@@ -3185,7 +3188,8 @@ fn test_storage_bucket_picking_for_bag_non_random() {
         let removed_bucket_id = 1;
         <crate::StorageBucketById<Test>>::remove(removed_bucket_id);
 
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
 
         let mut expected_ids =
             BTreeSet::from_iter((0u64..(initial_buckets_number + 1)).into_iter());
@@ -3199,7 +3203,8 @@ fn test_storage_bucket_picking_for_bag_non_random() {
             bucket.accepting_new_bags = false;
         });
 
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
 
         let mut expected_ids =
             BTreeSet::from_iter((0u64..(initial_buckets_number + 2)).into_iter());
@@ -3214,7 +3219,8 @@ fn test_storage_bucket_picking_for_bag_non_random() {
             DynamicBagCreationPolicy::default(),
         );
 
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
         assert_eq!(bucket_ids, BTreeSet::new());
     });
 }
@@ -3228,20 +3234,23 @@ fn test_storage_bucket_picking_for_bag_with_randomness() {
 
         let initial_buckets_number = InitialStorageBucketsNumberForDynamicBag::get();
         // No buckets
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
         assert_eq!(bucket_ids, BTreeSet::new());
 
         // Less then initial buckets number
         let buckets_number = initial_buckets_number - 1;
         let created_buckets = create_storage_buckets(buckets_number);
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
 
         assert_eq!(bucket_ids, created_buckets);
 
         // More then initial buckets number
         let buckets_number = 5;
         create_storage_buckets(buckets_number);
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
 
         let sequential_random_ids = BTreeSet::from_iter((0u64..initial_buckets_number).into_iter());
 
@@ -3258,7 +3267,8 @@ fn test_storage_bucket_picking_for_bag_with_randomness() {
         let removed_bucket_id = bucket_ids.iter().next().unwrap();
         <crate::StorageBucketById<Test>>::remove(removed_bucket_id);
 
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
         // Check number of generated IDs
         assert_eq!(initial_buckets_number, bucket_ids.len() as u64);
         // Check that IDs are within possible range.
@@ -3274,7 +3284,8 @@ fn test_storage_bucket_picking_for_bag_with_randomness() {
             bucket.accepting_new_bags = false;
         });
 
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
 
         let mut expected_ids =
             BTreeSet::from_iter((0u64..(initial_buckets_number + 2)).into_iter());
@@ -3296,7 +3307,8 @@ fn test_storage_bucket_picking_for_bag_with_randomness() {
             DynamicBagCreationPolicy::default(),
         );
 
-        let bucket_ids = Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member);
+        let bucket_ids =
+            Storage::pick_storage_buckets_for_dynamic_bag(DynamicBagType::Member, None);
         assert_eq!(bucket_ids, BTreeSet::new());
     });
 }
