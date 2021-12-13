@@ -3355,6 +3355,14 @@ fn create_storage_buckets(buckets_number: u64) -> BTreeSet<u64> {
     let objects_limit = 1;
     let size_limit = 100;
 
+    create_storage_buckets_with_limits(buckets_number, size_limit, objects_limit)
+}
+
+fn create_storage_buckets_with_limits(
+    buckets_number: u64,
+    size_limit: u64,
+    objects_limit: u64,
+) -> BTreeSet<u64> {
     let mut bucket_ids = BTreeSet::new();
 
     for _ in 0..buckets_number {
@@ -5086,3 +5094,93 @@ fn create_dynamic_bag_with_objects_succeeds() {
         ));
     });
 }
+
+#[test]
+fn create_dynamic_bag_with_objects_fails_with_no_bucket_availables_with_enough_number_objects() {
+    build_test_externalities().execute_with(|| {
+        let starting_block = 1;
+        run_to_block(starting_block);
+
+        let dynamic_bag_id = DynamicBagId::<Test>::Member(DEFAULT_MEMBER_ID);
+
+        create_storage_buckets(10);
+
+        let deletion_prize_value = 100;
+        let deletion_prize_account_id = DEFAULT_MEMBER_ACCOUNT_ID;
+        let initial_balance = 10000;
+        increase_account_balance(&deletion_prize_account_id, initial_balance);
+
+        let deletion_prize = DynamicBagDeletionPrize::<Test> {
+            prize: deletion_prize_value,
+            account_id: deletion_prize_account_id,
+        };
+
+        let upload_parameters = UploadParameters::<Test> {
+            bag_id: BagId::<Test>::from(dynamic_bag_id.clone()),
+            object_creation_list: create_data_object_candidates(1, 3),
+            deletion_prize_source_account_id: DEFAULT_MEMBER_ACCOUNT_ID,
+            expected_data_size_fee: Storage::data_object_per_mega_byte_fee(),
+        };
+
+        // pre-check balances
+        assert_eq!(
+            Balances::usable_balance(&DEFAULT_MEMBER_ACCOUNT_ID),
+            initial_balance
+        );
+        assert_eq!(
+            Balances::usable_balance(&<StorageTreasury<Test>>::module_account_id()),
+            0
+        );
+
+        CreateDynamicBagWithObjectsFixture::default()
+            .with_bag_id(dynamic_bag_id.clone())
+            .with_deletion_prize(deletion_prize.clone())
+            .with_objects(upload_parameters)
+            .call_and_assert(Err(Error::<Test>::StorageBucketIdCollectionsAreEmpty.into()));
+    })
+}
+
+// #[test]
+// fn create_dynamic_bag_with_objects_fails_with_no_bucket_availables_with_enough_size() {
+//     build_test_externalities().execute_with(|| {
+//         let starting_block = 1;
+//         run_to_block(starting_block);
+
+//         let dynamic_bag_id = DynamicBagId::<Test>::Member(DEFAULT_MEMBER_ID);
+
+//         create_storage_buckets_with_limits(10, 1, 10);
+
+//         let deletion_prize_value = 100;
+//         let deletion_prize_account_id = DEFAULT_MEMBER_ACCOUNT_ID;
+//         let initial_balance = 10000;
+//         increase_account_balance(&deletion_prize_account_id, initial_balance);
+
+//         let deletion_prize = DynamicBagDeletionPrize::<Test> {
+//             prize: deletion_prize_value,
+//             account_id: deletion_prize_account_id,
+//         };
+
+//         let upload_parameters = UploadParameters::<Test> {
+//             bag_id: BagId::<Test>::from(dynamic_bag_id.clone()),
+//             object_creation_list: create_data_object_candidates(1, 3),
+//             deletion_prize_source_account_id: DEFAULT_MEMBER_ACCOUNT_ID,
+//             expected_data_size_fee: Storage::data_object_per_mega_byte_fee(),
+//         };
+
+//         // pre-check balances
+//         assert_eq!(
+//             Balances::usable_balance(&DEFAULT_MEMBER_ACCOUNT_ID),
+//             initial_balance
+//         );
+//         assert_eq!(
+//             Balances::usable_balance(&<StorageTreasury<Test>>::module_account_id()),
+//             0
+//         );
+
+//         CreateDynamicBagWithObjectsFixture::default()
+//             .with_bag_id(dynamic_bag_id.clone())
+//             .with_deletion_prize(deletion_prize.clone())
+//             .with_objects(upload_parameters)
+//             .call_and_assert(Err(Error::<Test>::StorageBucketIdCollectionsAreEmpty.into()));
+//     })
+// }
