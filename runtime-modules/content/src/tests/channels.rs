@@ -12,6 +12,7 @@ fn successful_channel_deletion() {
         // Run to block one to see emitted events
         run_to_block(1);
 
+        create_initial_storage_buckets();
         // create an account with enought balance
         let _ = balances::Module::<Test>::deposit_creating(
             &FIRST_MEMBER_ORIGIN,
@@ -97,6 +98,7 @@ fn successful_channel_assets_deletion() {
         // Run to block one to see emitted events
         run_to_block(1);
 
+        create_initial_storage_buckets();
         // create an account with enought balance
         let _ = balances::Module::<Test>::deposit_creating(
             &FIRST_MEMBER_ORIGIN,
@@ -154,10 +156,12 @@ fn successful_channel_assets_deletion() {
 }
 
 #[test]
-fn succesful_channel_update() {
+fn successful_channel_update() {
     with_default_mock_builder(|| {
         // Run to block one to see emitted events
         run_to_block(1);
+
+        create_initial_storage_buckets();
 
         // create an account with enought balance
         let _ = balances::Module::<Test>::deposit_creating(
@@ -247,6 +251,7 @@ fn succesful_channel_creation() {
         // Run to block one to see emitted events
         run_to_block(1);
 
+        create_initial_storage_buckets();
         // create an account with enought balance
         let _ = balances::Module::<Test>::deposit_creating(
             &FIRST_MEMBER_ORIGIN,
@@ -674,8 +679,9 @@ fn channel_censoring() {
 }
 
 #[test]
-fn channel_creation_doesnt_live_bags_dangling() {
+fn channel_creation_failure_doesnt_leave_bags_dangling() {
     with_default_mock_builder(|| {
+        create_initial_storage_buckets();
         // number of assets big enought to make upload_data_objects throw
         let asset_num = 100_000usize;
         let mut object_creation_list =
@@ -702,7 +708,7 @@ fn channel_creation_doesnt_live_bags_dangling() {
                 meta: Some(vec![]),
                 reward_account: None,
             },
-            Err(storage::Error::<Test>::StorageBucketIdCollectionsAreEmpty.into()),
+            Err(storage::Error::<Test>::MaxDataObjectSizeExceeded.into()),
         );
 
         // ensure that no bag are left dangling

@@ -1082,6 +1082,7 @@ impl UpdateStorageBucketsVoucherMaxLimitsFixture {
 pub struct CreateDynamicBagFixture {
     bag_id: DynamicBagId<Test>,
     deletion_prize: Option<DynamicBagDeletionPrize<Test>>,
+    upload_parameters: UploadParameters<Test>,
 }
 
 impl CreateDynamicBagFixture {
@@ -1089,6 +1090,7 @@ impl CreateDynamicBagFixture {
         Self {
             bag_id: Default::default(),
             deletion_prize: Default::default(),
+            upload_parameters: Default::default(),
         }
     }
 
@@ -1099,6 +1101,13 @@ impl CreateDynamicBagFixture {
     pub fn with_deletion_prize(self, deletion_prize: DynamicBagDeletionPrize<Test>) -> Self {
         Self {
             deletion_prize: Some(deletion_prize),
+            ..self
+        }
+    }
+
+    pub fn with_objects(self, upload_parameters: UploadParameters<Test>) -> Self {
+        Self {
+            upload_parameters,
             ..self
         }
     }

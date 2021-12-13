@@ -28,6 +28,7 @@ fn video_creation_successful() {
     with_default_mock_builder(|| {
         run_to_block(1);
 
+        create_initial_storage_buckets();
         // depositi initial balance
         let _ = balances::Module::<Test>::deposit_creating(
             &FIRST_MEMBER_ORIGIN,
@@ -83,6 +84,7 @@ fn video_update_successful() {
     with_default_mock_builder(|| {
         run_to_block(1);
 
+        create_initial_storage_buckets();
         let _ = balances::Module::<Test>::deposit_creating(
             &FIRST_MEMBER_ORIGIN,
             <Test as balances::Trait>::Balance::from(100u32),
@@ -178,6 +180,8 @@ fn member_can_create_videos() {
     with_default_mock_builder(|| {
         // Run to block one to see emitted events
         run_to_block(1);
+
+        create_initial_storage_buckets();
         let channel_id = create_member_channel();
 
         let video_id = Content::next_video_id();

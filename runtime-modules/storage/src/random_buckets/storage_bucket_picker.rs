@@ -72,12 +72,12 @@ impl<T: Trait> StorageBucketPicker<T> {
         let limits_sufficient = bucket.as_ref().map_or(false, |bucket| {
             voucher_update.map_or(true, |voucher_update| {
                 let num_objects_enough = bucket.voucher.objects_limit
-                    < bucket
+                    >= bucket
                         .voucher
                         .objects_used
                         .saturating_add(voucher_update.objects_number);
                 let size_enough = bucket.voucher.size_limit
-                    < bucket
+                    >= bucket
                         .voucher
                         .size_used
                         .saturating_add(voucher_update.objects_total_size);
