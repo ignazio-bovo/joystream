@@ -3005,9 +3005,13 @@ fn set_max_voucher_limits() {
     let new_size_limit = 100;
     let new_objects_limit = 1;
 
+    set_max_voucher_limits_with_params(new_size_limit, new_objects_limit);
+}
+
+fn set_max_voucher_limits_with_params(size_limit: u64, objects_limit: u64) {
     UpdateStorageBucketsVoucherMaxLimitsFixture::default()
-        .with_new_objects_size_limit(new_size_limit)
-        .with_new_objects_number_limit(new_objects_limit)
+        .with_new_objects_size_limit(size_limit)
+        .with_new_objects_number_limit(objects_limit)
         .call_and_assert(Ok(()));
 }
 
@@ -5140,47 +5144,52 @@ fn create_dynamic_bag_with_objects_fails_with_no_bucket_availables_with_enough_n
     })
 }
 
-// #[test]
-// fn create_dynamic_bag_with_objects_fails_with_no_bucket_availables_with_enough_size() {
-//     build_test_externalities().execute_with(|| {
-//         let starting_block = 1;
-//         run_to_block(starting_block);
+#[test]
+fn create_dynamic_bag_with_objects_fails_with_no_bucket_availables_with_enough_size() {
+    build_test_externalities().execute_with(|| {
+        let starting_block = 1;
+        run_to_block(starting_block);
 
-//         let dynamic_bag_id = DynamicBagId::<Test>::Member(DEFAULT_MEMBER_ID);
+        // set limit size 100 and limit obj number 20
+        set_max_voucher_limits_with_params(100, 20);
 
-//         create_storage_buckets_with_limits(10, 1, 10);
+        let dynamic_bag_id = DynamicBagId::<Test>::Member(DEFAULT_MEMBER_ID);
 
-//         let deletion_prize_value = 100;
-//         let deletion_prize_account_id = DEFAULT_MEMBER_ACCOUNT_ID;
-//         let initial_balance = 10000;
-//         increase_account_balance(&deletion_prize_account_id, initial_balance);
+        // create 10 buckets each with size limit 1 and num object limit 10
+        create_storage_buckets_with_limits(10, 1, 10);
 
-//         let deletion_prize = DynamicBagDeletionPrize::<Test> {
-//             prize: deletion_prize_value,
-//             account_id: deletion_prize_account_id,
-//         };
+        let deletion_prize_value = 100;
+        let deletion_prize_account_id = DEFAULT_MEMBER_ACCOUNT_ID;
+        let initial_balance = 10000;
+        increase_account_balance(&deletion_prize_account_id, initial_balance);
 
-//         let upload_parameters = UploadParameters::<Test> {
-//             bag_id: BagId::<Test>::from(dynamic_bag_id.clone()),
-//             object_creation_list: create_data_object_candidates(1, 3),
-//             deletion_prize_source_account_id: DEFAULT_MEMBER_ACCOUNT_ID,
-//             expected_data_size_fee: Storage::data_object_per_mega_byte_fee(),
-//         };
+        let deletion_prize = DynamicBagDeletionPrize::<Test> {
+            prize: deletion_prize_value,
+            account_id: deletion_prize_account_id,
+        };
 
-//         // pre-check balances
-//         assert_eq!(
-//             Balances::usable_balance(&DEFAULT_MEMBER_ACCOUNT_ID),
-//             initial_balance
-//         );
-//         assert_eq!(
-//             Balances::usable_balance(&<StorageTreasury<Test>>::module_account_id()),
-//             0
-//         );
+        // try uploading with 3 objects each exceeding bucket size limit
+        let upload_parameters = UploadParameters::<Test> {
+            bag_id: BagId::<Test>::from(dynamic_bag_id.clone()),
+            object_creation_list: create_data_object_candidates(1, 3),
+            deletion_prize_source_account_id: DEFAULT_MEMBER_ACCOUNT_ID,
+            expected_data_size_fee: Storage::data_object_per_mega_byte_fee(),
+        };
 
-//         CreateDynamicBagWithObjectsFixture::default()
-//             .with_bag_id(dynamic_bag_id.clone())
-//             .with_deletion_prize(deletion_prize.clone())
-//             .with_objects(upload_parameters)
-//             .call_and_assert(Err(Error::<Test>::StorageBucketIdCollectionsAreEmpty.into()));
-//     })
-// }
+        // pre-check balances
+        assert_eq!(
+            Balances::usable_balance(&DEFAULT_MEMBER_ACCOUNT_ID),
+            initial_balance
+        );
+        assert_eq!(
+            Balances::usable_balance(&<StorageTreasury<Test>>::module_account_id()),
+            0
+        );
+
+        CreateDynamicBagWithObjectsFixture::default()
+            .with_bag_id(dynamic_bag_id.clone())
+            .with_deletion_prize(deletion_prize.clone())
+            .with_objects(upload_parameters)
+            .call_and_assert(Err(Error::<Test>::StorageBucketIdCollectionsAreEmpty.into()));
+    })
+}
