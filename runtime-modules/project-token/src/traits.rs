@@ -18,6 +18,9 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
     /// Token Identifier type used
     type TokenId;
 
+    /// Block number type
+    type BlockNumber;
+
     /// Mint `amount` into account `who` (possibly creating it)
     fn deposit_creating(
         token_id: Self::TokenId,
@@ -61,4 +64,10 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
 
     /// Allow creator to receive credit into his accounts
     fn claim_patronage_credit(token_id: Self::TokenId, to_account: AccountId) -> DispatchResult;
+
+    /// Issue a revenue split for the token
+    fn issue_revenue_split(token_id: Self::TokenId, start: Self::BlockNumber) -> DispatchResult;
+
+    /// Participate to the token revenue split if ongoing
+    fn participate_to_split(token_id: Self::TokenId) -> DispatchResult;
 }

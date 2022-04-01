@@ -38,5 +38,8 @@ decl_error! {
 
         /// Symbol already in use
         TokenSymbolAlreadyInUse,
+
+        /// Starting Block Lower than current block
+        StartingBlockLowerThanCurrentBlock,
     }
 }

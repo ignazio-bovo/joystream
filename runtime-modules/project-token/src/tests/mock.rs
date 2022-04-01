@@ -27,7 +27,9 @@ pub type Balance = <Test as Trait>::Balance;
 pub type Simple = SimpleLocation<AccountId>;
 pub type Policy = TransferPolicyOf<Test>;
 pub type Hashing = <Test as frame_system::Trait>::Hashing;
+pub type HashOut = <Test as frame_system::Trait>::Hash;
 pub type Verifiable = VerifiableLocation<AccountId, Hashing>;
+pub type BlockNumber = <Test as frame_system::Trait>::BlockNumber;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -101,6 +103,7 @@ pub struct GenesisConfigBuilder {
     pub(crate) account_info_by_token_and_account: Vec<(TokenId, AccountId, AccountData)>,
     pub(crate) token_info_by_id: Vec<(TokenId, TokenData)>,
     pub(crate) next_token_id: TokenId,
+    pub(crate) symbols_used: Vec<(HashOut, ())>,
 }
 
 /// test externalities

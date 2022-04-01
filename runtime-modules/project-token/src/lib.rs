@@ -51,7 +51,7 @@ decl_storage! {
         pub NextTokenId get(fn next_token_id) config(): T::TokenId;
 
         /// Set for the tokens symbols
-        pub SymbolsUsed get (fn symbol_used) config():
+        pub SymbolsUsed get (fn symbols_used) config():
         map
             hasher(blake2_128_concat) T::Hash => ();
     }
@@ -75,6 +75,8 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     type Balance = T::Balance;
 
     type TokenId = T::TokenId;
+
+    type BlockNumber = <T as frame_system::Trait>::BlockNumber;
 
     /// Transfer `amount` from `src` account to `dst` according to provided policy
     /// Preconditions:
@@ -324,6 +326,25 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 
         Self::deposit_event(RawEvent::TokenAmountDepositedInto(token_id, who, amount));
         Ok(())
+    }
+
+    /// Issue a revenue split for the token
+    fn issue_revenue_split(token_id: T::TokenId, start: T::BlockNumber) -> DispatchResult {
+        let _token_info = Self::ensure_token_exists(token_id)?;
+
+        ensure!(
+            start >= <frame_system::Module<T>>::block_number(),
+            Error::<T>::StartingBlockLowerThanCurrentBlock
+        );
+
+        // == MUTATION SAFE ==
+
+        Ok(())
+    }
+
+    /// Participate to the token revenue split if ongoing
+    fn participate_to_split(token_id: T::TokenId) -> DispatchResult {
+        todo!()
     }
 }
 

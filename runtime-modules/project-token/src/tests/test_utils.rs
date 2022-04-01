@@ -1,4 +1,5 @@
 use sp_arithmetic::traits::{One, Saturating, Zero};
+use sp_runtime::traits::Hash;
 use sp_runtime::Percent;
 
 use crate::tests::mock::*;
@@ -88,6 +89,7 @@ impl GenesisConfigBuilder {
             token_info_by_id: vec![],
             account_info_by_token_and_account: vec![],
             next_token_id: TokenId::one(),
+            symbols_used: vec![],
         }
     }
 
@@ -95,6 +97,7 @@ impl GenesisConfigBuilder {
     pub fn with_token(mut self, token_id: TokenId, token_info: TokenData) -> Self {
         self.token_info_by_id.push((token_id, token_info));
         self.next_token_id = self.next_token_id.saturating_add(TokenId::one());
+        self.symbols_used.push((Hashing::hash_of(&token_id), ()));
         self
     }
 
@@ -135,6 +138,7 @@ impl GenesisConfigBuilder {
             account_info_by_token_and_account: self.account_info_by_token_and_account,
             token_info_by_id: self.token_info_by_id,
             next_token_id: self.next_token_id,
+            symbols_used: self.symbols_used,
         }
     }
 }
