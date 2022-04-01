@@ -45,9 +45,10 @@ pub struct AccountData<Balance> {
     pub(crate) reserved_balance: Balance,
 }
 
+// TODO: add extra type for Reserve = JOY balance different from CRT balance?
 /// Info for the token
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
-pub struct TokenData<Balance, Hash> {
+pub struct TokenData<Balance, Hash, ReserveAccountId> {
     /// Current token issuance
     pub(crate) current_total_issuance: Balance,
 
@@ -62,6 +63,35 @@ pub struct TokenData<Balance, Hash> {
 
     /// Patronage Information
     pub(crate) patronage_info: PatronageData<Balance>,
+
+    /// Revenue Split state info
+    pub(crate) revenue_split: SplitState<Balance, ReserveAccountId>,
+}
+
+/// Revenue Split State Information
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
+pub enum SplitState<Balance, AccountId> {
+    /// Inactive state: no split ongoing
+    Inactive,
+
+    /// Active state: split ongoing with info
+    Active(SplitData<Balance, AccountId>),
+}
+
+impl<Balance, AccountId> Default for SplitState<Balance, AccountId> {
+    fn default() -> Self {
+        SplitState::Inactive
+    }
+}
+
+/// Revenue Split information
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
+pub struct SplitData<Balance, AccountId> {
+    /// Token allocation for the split
+    allocation: Balance,
+
+    /// account with the allocation
+    treasury_account: AccountId,
 }
 
 /// Patronage information
@@ -206,7 +236,7 @@ impl<Balance: Zero + Copy + PartialOrd + Saturating> AccountData<Balance> {
     }
 }
 /// Token Data implementation
-impl<Balance, Hash> TokenData<Balance, Hash> {
+impl<Balance, Hash, ReserveAccountId> TokenData<Balance, Hash, ReserveAccountId> {
     // validate transfer destination location according to self.policy
     pub(crate) fn ensure_valid_location_for_policy<T, AccountId, Location>(
         &self,
@@ -221,25 +251,6 @@ impl<Balance, Hash> TokenData<Balance, Hash> {
             crate::Error::<T>::LocationIncompatibleWithCurrentPolicy
         );
         Ok(())
-    }
-}
-/// Encapsules parameters validation + TokenData construction
-impl<Balance: Zero + Copy + PartialOrd, Hash> TokenIssuanceParameters<Balance, Hash> {
-    /// Forward `self` state
-    pub fn try_build<T: crate::Trait>(self) -> Result<TokenData<Balance, Hash>, DispatchError> {
-        // validation
-
-        let patronage_info = PatronageData::<Balance> {
-            outstanding_credit: Balance::zero(),
-            rate: self.patronage_rate,
-        };
-        Ok(TokenData::<Balance, Hash> {
-            current_total_issuance: self.initial_issuance,
-            issuance_state: self.initial_state,
-            existential_deposit: self.existential_deposit,
-            transfer_policy: self.transfer_policy,
-            patronage_info,
-        })
     }
 }
 
@@ -309,9 +320,16 @@ impl<AccountId: Encode, Hasher: Hash> VerifiableLocation<AccountId, Hasher> {
 /// Alias for Account Data
 pub(crate) type AccountDataOf<T> = AccountData<<T as crate::Trait>::Balance>;
 
+/// Alias for the issuance split state
+pub(crate) type SplitStateOf<T> =
+    SplitState<<T as crate::Trait>::Balance, <T as frame_system::Trait>::AccountId>;
+
 /// Alias for Token Data
-pub(crate) type TokenDataOf<T> =
-    TokenData<<T as crate::Trait>::Balance, <T as frame_system::Trait>::Hash>;
+pub(crate) type TokenDataOf<T> = TokenData<
+    <T as crate::Trait>::Balance,
+    <T as frame_system::Trait>::Hash,
+    <T as frame_system::Trait>::AccountId,
+>;
 
 /// Alias for Token Issuance Parameters
 pub(crate) type TokenIssuanceParametersOf<T> =

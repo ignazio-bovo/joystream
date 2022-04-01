@@ -258,7 +258,8 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
             crate::Error::<T>::TokenSymbolAlreadyInUse,
         );
 
-        let token_data = issuance_parameters.try_build::<T>()?;
+        // TODO: implement try_build() for issuance parameters
+        let token_data = TokenDataOf::<T>::default();
 
         // == MUTATION SAFE ==
 
