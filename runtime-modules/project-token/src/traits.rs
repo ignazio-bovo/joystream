@@ -21,6 +21,9 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
     /// Block number type
     type BlockNumber;
 
+    /// Reserve Balance used (JOY balance)
+    type ReserveBalance;
+
     /// Mint `amount` into account `who` (possibly creating it)
     fn deposit_creating(
         token_id: Self::TokenId,
@@ -70,6 +73,9 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
         token_id: Self::TokenId,
         start: Self::BlockNumber,
         duration: Self::BlockNumber,
+        reserve_source: AccountId,
+        reserve_treasury: AccountId,
+        allocation: Self::ReserveBalance,
     ) -> DispatchResult;
 
     /// Participate to the token revenue split if ongoing

@@ -48,7 +48,7 @@ pub struct AccountData<Balance> {
 // TODO: add extra type for Reserve = JOY balance different from CRT balance?
 /// Info for the token
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
-pub struct TokenData<Balance, Hash, ReserveAccountId> {
+pub struct TokenData<Balance, Hash, SplitState> {
     /// Current token issuance
     pub(crate) current_total_issuance: Balance,
 
@@ -65,7 +65,7 @@ pub struct TokenData<Balance, Hash, ReserveAccountId> {
     pub(crate) patronage_info: PatronageData<Balance>,
 
     /// Revenue Split state info
-    pub(crate) revenue_split: SplitState<Balance, ReserveAccountId>,
+    pub(crate) revenue_split: SplitState,
 }
 
 /// Revenue Split State Information
@@ -76,12 +76,6 @@ pub enum SplitState<Balance, AccountId> {
 
     /// Active state: split ongoing with info
     Active(SplitData<Balance, AccountId>),
-}
-
-impl<Balance, AccountId> Default for SplitState<Balance, AccountId> {
-    fn default() -> Self {
-        SplitState::Inactive
-    }
 }
 
 /// Revenue Split information
@@ -236,7 +230,7 @@ impl<Balance: Zero + Copy + PartialOrd + Saturating> AccountData<Balance> {
     }
 }
 /// Token Data implementation
-impl<Balance, Hash, ReserveAccountId> TokenData<Balance, Hash, ReserveAccountId> {
+impl<Balance, Hash, SplitState> TokenData<Balance, Hash, SplitState> {
     // validate transfer destination location according to self.policy
     pub(crate) fn ensure_valid_location_for_policy<T, AccountId, Location>(
         &self,
@@ -316,6 +310,21 @@ impl<AccountId: Encode, Hasher: Hash> VerifiableLocation<AccountId, Hasher> {
     }
 }
 
+impl<Balance, AccountId> Default for SplitState<Balance, AccountId> {
+    fn default() -> Self {
+        SplitState::Inactive
+    }
+}
+
+impl<Balance, AccountId> SplitState<Balance, AccountId> {
+    fn activate(allocation: Balance, treasury_account: AccountId) -> Self {
+        SplitState::Active(SplitData::<_, _> {
+            allocation,
+            treasury_account,
+        })
+    }
+}
+
 // Aliases
 /// Alias for Account Data
 pub(crate) type AccountDataOf<T> = AccountData<<T as crate::Trait>::Balance>;
@@ -325,11 +334,8 @@ pub(crate) type SplitStateOf<T> =
     SplitState<<T as crate::Trait>::Balance, <T as frame_system::Trait>::AccountId>;
 
 /// Alias for Token Data
-pub(crate) type TokenDataOf<T> = TokenData<
-    <T as crate::Trait>::Balance,
-    <T as frame_system::Trait>::Hash,
-    <T as frame_system::Trait>::AccountId,
->;
+pub(crate) type TokenDataOf<T> =
+    TokenData<<T as crate::Trait>::Balance, <T as frame_system::Trait>::Hash, SplitStateOf<T>>;
 
 /// Alias for Token Issuance Parameters
 pub(crate) type TokenIssuanceParametersOf<T> =

@@ -36,6 +36,9 @@ pub trait Trait: frame_system::Trait {
 
     /// Min revenue split duration bound
     type MinRevenueSplitDuration: Get<Self::BlockNumber>;
+
+    /// the Balance type used for the JOY reserve
+    type ReserveBalance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + Saturating;
 }
 
 decl_storage! {
@@ -77,6 +80,8 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     for Module<T>
 {
     type Balance = T::Balance;
+
+    type ReserveBalance = T::ReserveBalance;
 
     type TokenId = T::TokenId;
 
@@ -338,6 +343,9 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         token_id: T::TokenId,
         start: T::BlockNumber,
         duration: T::BlockNumber,
+        reserve_source: T::AccountId,
+        reserve_treasury: T::AccountId,
+        allocation: T::ReserveBalance,
     ) -> DispatchResult {
         let _token_info = Self::ensure_token_exists(token_id)?;
 
@@ -350,6 +358,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
             duration >= T::MinRevenueSplitDuration::get(),
             Error::<T>::RevenueSplitDurationTooShort,
         );
+
         // == MUTATION SAFE ==
 
         Ok(())
