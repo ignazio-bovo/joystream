@@ -317,7 +317,7 @@ impl<Balance, AccountId> Default for SplitState<Balance, AccountId> {
 }
 
 impl<Balance, AccountId> SplitState<Balance, AccountId> {
-    fn activate(allocation: Balance, treasury_account: AccountId) -> Self {
+    pub(crate) fn activate(allocation: Balance, treasury_account: AccountId) -> Self {
         SplitState::Active(SplitData::<_, _> {
             allocation,
             treasury_account,
@@ -336,7 +336,6 @@ pub(crate) type SplitStateOf<T> =
 /// Alias for Token Data
 pub(crate) type TokenDataOf<T> =
     TokenData<<T as crate::Trait>::Balance, <T as frame_system::Trait>::Hash, SplitStateOf<T>>;
-
 /// Alias for Token Issuance Parameters
 pub(crate) type TokenIssuanceParametersOf<T> =
     TokenIssuanceParameters<<T as crate::Trait>::Balance, <T as frame_system::Trait>::Hash>;

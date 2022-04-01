@@ -10,10 +10,11 @@ use sp_arithmetic::{traits::One, Perbill};
 use sp_io::TestExternalities;
 use sp_runtime::testing::{Header, H256};
 use sp_runtime::traits::{BlakeTwo256, Hash, IdentityLookup};
+use sp_runtime::ModuleId;
 
 // crate import
 use crate::{
-    types::{MerkleSide, SimpleLocation, VerifiableLocation},
+    types::{MerkleSide, SimpleLocation, SplitStateOf, VerifiableLocation},
     AccountDataOf, GenesisConfig, TokenDataOf, TokenIssuanceParametersOf, Trait, TransferPolicyOf,
 };
 
@@ -30,6 +31,7 @@ pub type Hashing = <Test as frame_system::Trait>::Hashing;
 pub type HashOut = <Test as frame_system::Trait>::Hash;
 pub type Verifiable = VerifiableLocation<AccountId, Hashing>;
 pub type BlockNumber = <Test as frame_system::Trait>::BlockNumber;
+pub type SplitState = SplitStateOf<Test>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -94,13 +96,16 @@ impl frame_system::Trait for Test {
 
 parameter_types! {
     pub const MinRevenueSplitDuration: u64 = 10;
+    pub const TokenModuleId: ModuleId = ModuleId(*b"tokenMod"); // module storage
 }
 
 impl Trait for Test {
     type Event = TestEvent;
     type Balance = u64;
+    type ReserveBalance = u64;
     type TokenId = u64;
     type MinRevenueSplitDuration = MinRevenueSplitDuration;
+    type ModuleId = TokenModuleId;
 }
 
 /// Genesis config builder

@@ -7,7 +7,7 @@ use frame_support::{
     traits::Get,
 };
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, One, Saturating, Zero};
-use sp_runtime::{traits::Hash, Percent};
+use sp_runtime::{traits::AccountIdConversion, ModuleId, Percent};
 
 // crate modules
 mod errors;
@@ -39,6 +39,8 @@ pub trait Trait: frame_system::Trait {
 
     /// the Balance type used for the JOY reserve
     type ReserveBalance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + Saturating;
+    /// Module Id type used for account generation
+    type ModuleId: Get<ModuleId>;
 }
 
 decl_storage! {
@@ -343,7 +345,6 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         token_id: T::TokenId,
         start: T::BlockNumber,
         duration: T::BlockNumber,
-        reserve_source: T::AccountId,
         reserve_treasury: T::AccountId,
         allocation: T::ReserveBalance,
     ) -> DispatchResult {
@@ -358,6 +359,8 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
             duration >= T::MinRevenueSplitDuration::get(),
             Error::<T>::RevenueSplitDurationTooShort,
         );
+
+        let _treasury_account: T::AccountId = T::ModuleId::get().into_sub_account(token_id);
 
         // == MUTATION SAFE ==
 

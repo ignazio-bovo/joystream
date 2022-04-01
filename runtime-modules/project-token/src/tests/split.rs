@@ -19,12 +19,12 @@ macro_rules! block {
 fn issue_split_fails_with_invalid_token_id() {
     let token_id = token!(1);
     let config = GenesisConfigBuilder::new_empty().build();
-    let start = block!(1);
-    let duration = block!(100);
+    let (start, duration) = (block!(1), block!(100));
+    let (src, allocation) = (account!(1), balance!(100));
 
     build_test_externalities(config).execute_with(|| {
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, start, duration,
+            token_id, start, duration, src, allocation,
         );
 
         assert_noop!(result, Error::<Test>::TokenDoesNotExist);
@@ -38,14 +38,14 @@ fn issue_split_fails_with_invalid_starting_block() {
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
         .build();
-    let start = block!(1);
-    let duration = block!(100);
+    let (start, duration) = (block!(1), block!(100));
+    let (src, allocation) = (account!(1), balance!(100));
 
     build_test_externalities(config).execute_with(|| {
         increase_block_number_by(block!(2));
 
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, start, duration,
+            token_id, start, duration, src, allocation,
         );
 
         assert_noop!(result, Error::<Test>::StartingBlockLowerThanCurrentBlock);
@@ -59,12 +59,13 @@ fn issue_split_fails_with_duration_too_short() {
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
         .build();
-    let start = block!(1);
-    let duration = MinRevenueSplitDuration::get() - block!(1);
+
+    let (start, duration) = (block!(1), MinRevenueSplitDuration::get() - block!(1));
+    let (src, allocation) = (account!(1), balance!(100));
 
     build_test_externalities(config).execute_with(|| {
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, start, duration,
+            token_id, start, duration, src, allocation,
         );
 
         assert_noop!(result, Error::<Test>::RevenueSplitDurationTooShort);

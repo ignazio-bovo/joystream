@@ -73,7 +73,6 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
         token_id: Self::TokenId,
         start: Self::BlockNumber,
         duration: Self::BlockNumber,
-        reserve_source: AccountId,
         reserve_treasury: AccountId,
         allocation: Self::ReserveBalance,
     ) -> DispatchResult;
