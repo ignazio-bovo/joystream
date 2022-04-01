@@ -2,7 +2,7 @@
 
 use frame_support::{
     impl_outer_event, impl_outer_origin, parameter_types,
-    traits::{OnFinalize, OnInitialize},
+    traits::{Currency, OnFinalize, OnInitialize},
 };
 
 use codec::Encode;
@@ -25,6 +25,7 @@ pub type IssuanceParams = TokenIssuanceParametersOf<Test>;
 pub type AccountData = AccountDataOf<Test>;
 pub type AccountId = <Test as frame_system::Trait>::AccountId;
 pub type Balance = <Test as Trait>::Balance;
+pub type ReserveBalance = <<Test as crate::Trait>::ReserveCurrency as Currency<AccountId>>::Balance;
 pub type Simple = SimpleLocation<AccountId>;
 pub type Policy = TransferPolicyOf<Test>;
 pub type Hashing = <Test as frame_system::Trait>::Hashing;
@@ -55,6 +56,7 @@ impl_outer_event! {
     pub enum TestEvent for Test {
         token<T>,
         frame_system<T>,
+        balances<T>,
     }
 }
 
@@ -102,10 +104,21 @@ parameter_types! {
 impl Trait for Test {
     type Event = TestEvent;
     type Balance = u64;
-    type ReserveBalance = u64;
+    type ReserveCurrency = Balances;
     type TokenId = u64;
     type MinRevenueSplitDuration = MinRevenueSplitDuration;
     type ModuleId = TokenModuleId;
+}
+
+/// Implement pallet balances trait for Test
+impl balances::Trait for Test {
+    type Balance = u64;
+    type DustRemoval = ();
+    type Event = TestEvent;
+    type ExistentialDeposit = ExistentialDeposit;
+    type AccountStore = System;
+    type WeightInfo = ();
+    type MaxLocks = ();
 }
 
 /// Genesis config builder
@@ -168,6 +181,7 @@ macro_rules! balance {
 // Modules aliases
 pub type Token = crate::Module<Test>;
 pub type System = frame_system::Module<Test>;
+pub type Balances = balances::Module<Test>;
 
 // Merkle tree Helpers
 #[derive(Debug)]

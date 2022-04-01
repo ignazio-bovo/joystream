@@ -4,7 +4,7 @@ use frame_support::{
     decl_module, decl_storage,
     dispatch::{fmt::Debug, marker::Copy, DispatchError, DispatchResult},
     ensure,
-    traits::Get,
+    traits::{Currency, Get},
 };
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, One, Saturating, Zero};
 use sp_runtime::{traits::AccountIdConversion, ModuleId, Percent};
@@ -37,8 +37,9 @@ pub trait Trait: frame_system::Trait {
     /// Min revenue split duration bound
     type MinRevenueSplitDuration: Get<Self::BlockNumber>;
 
-    /// the Balance type used for the JOY reserve
-    type ReserveBalance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + Saturating;
+    /// the Currency interface used as a reserve (i.e. JOY)
+    type ReserveCurrency: Currency<Self::AccountId>;
+
     /// Module Id type used for account generation
     type ModuleId: Get<ModuleId>;
 }
@@ -83,7 +84,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 {
     type Balance = T::Balance;
 
-    type ReserveBalance = T::ReserveBalance;
+    type ReserveBalance = <T::ReserveCurrency as Currency<T::AccountId>>::Balance;
 
     type TokenId = T::TokenId;
 
@@ -346,7 +347,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         start: T::BlockNumber,
         duration: T::BlockNumber,
         reserve_treasury: T::AccountId,
-        allocation: T::ReserveBalance,
+        allocation: Self::ReserveBalance,
     ) -> DispatchResult {
         let _token_info = Self::ensure_token_exists(token_id)?;
 

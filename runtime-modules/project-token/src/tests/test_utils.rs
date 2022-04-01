@@ -1,3 +1,4 @@
+use frame_support::traits::Currency;
 use sp_arithmetic::traits::{One, Saturating, Zero};
 use sp_runtime::traits::Hash;
 use sp_runtime::Percent;
@@ -146,6 +147,10 @@ impl GenesisConfigBuilder {
             symbols_used: self.symbols_used,
         }
     }
+}
+
+pub fn increase_account_balance(account_id: AccountId, balance: ReserveBalance) {
+    let _ = Balances::deposit_creating(&account_id, balance);
 }
 
 #[cfg(test)]

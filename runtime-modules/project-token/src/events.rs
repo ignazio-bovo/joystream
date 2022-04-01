@@ -1,4 +1,4 @@
-use frame_support::decl_event;
+use frame_support::{decl_event, traits::Currency};
 use sp_runtime::Percent;
 
 decl_event! {
@@ -7,6 +7,8 @@ decl_event! {
         Balance = <T as crate::Trait>::Balance,
         TokenId = <T as crate::Trait>::TokenId,
         AccountId = <T as frame_system::Trait>::AccountId,
+        BlockNumber = <T as frame_system::Trait>::BlockNumber,
+        ReserveBalance = <<T as crate::Trait>::ReserveCurrency as Currency<<T as frame_system::Trait>::AccountId>>::Balance,
     {
         /// Token amount is deposited
         /// Params:
@@ -64,5 +66,12 @@ decl_event! {
         /// - account
         PatronageCreditClaimed(TokenId, Balance, AccountId),
 
+        /// Revenue Split issued
+        /// Params:
+        /// - token identifier
+        /// - start of the split
+        /// - duration of the split
+        /// - JOY allocation
+        RevenueSplitIssued(TokenId, BlockNumber, BlockNumber, ReserveBalance),
     }
 }

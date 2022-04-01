@@ -44,5 +44,12 @@ decl_error! {
 
         /// Revenue Split duration is too short
         RevenueSplitDurationTooShort,
+
+        /// Insufficient Balance for Specified Allocation
+        InsufficientBalanceForSpecifiedAllocation,
+
+        /// Source account for the funds does not exists
+        AllocationSourceAccountDoesNotExist,
+
     }
 }
