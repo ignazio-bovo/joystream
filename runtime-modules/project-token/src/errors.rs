@@ -48,8 +48,5 @@ decl_error! {
         /// Insufficient Balance for Specified Allocation
         InsufficientBalanceForSpecifiedAllocation,
 
-        /// Source account for the funds does not exists
-        AllocationSourceAccountDoesNotExist,
-
     }
 }

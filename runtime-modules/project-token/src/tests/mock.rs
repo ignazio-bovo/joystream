@@ -14,7 +14,7 @@ use sp_runtime::ModuleId;
 
 // crate import
 use crate::{
-    types::{MerkleSide, SimpleLocation, SplitStateOf, VerifiableLocation},
+    types::{MerkleSide, SimpleLocation, SplitState, VerifiableLocation},
     AccountDataOf, GenesisConfig, TokenDataOf, TokenIssuanceParametersOf, Trait, TransferPolicyOf,
 };
 
@@ -32,7 +32,6 @@ pub type Hashing = <Test as frame_system::Trait>::Hashing;
 pub type HashOut = <Test as frame_system::Trait>::Hash;
 pub type Verifiable = VerifiableLocation<AccountId, Hashing>;
 pub type BlockNumber = <Test as frame_system::Trait>::BlockNumber;
-pub type SplitState = SplitStateOf<Test>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -98,7 +97,8 @@ impl frame_system::Trait for Test {
 
 parameter_types! {
     pub const MinRevenueSplitDuration: u64 = 10;
-    pub const TokenModuleId: ModuleId = ModuleId(*b"tokenMod"); // module storage
+    pub const TokenModuleId: ModuleId = ModuleId(*b"tokenMod"); // module token
+    pub const ExistentialDeposit: u64 = 0;
 }
 
 impl Trait for Test {

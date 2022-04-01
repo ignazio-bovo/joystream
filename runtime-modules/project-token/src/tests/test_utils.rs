@@ -4,10 +4,10 @@ use sp_runtime::traits::Hash;
 use sp_runtime::Percent;
 
 use crate::tests::mock::*;
-use crate::types::{IssuanceState, PatronageData, SplitData, SplitState, TransferPolicy};
+use crate::types::{IssuanceState, PatronageData, SplitState, TransferPolicy};
 use crate::GenesisConfig;
 
-pub struct TokenDataBuilder<Balance, Hash, SplitState> {
+pub struct TokenDataBuilder<Balance, Hash> {
     pub(crate) current_total_issuance: Balance,
     pub(crate) existential_deposit: Balance,
     pub(crate) issuance_state: IssuanceState,
@@ -16,11 +16,9 @@ pub struct TokenDataBuilder<Balance, Hash, SplitState> {
     pub(crate) revenue_split: SplitState,
 }
 
-impl<Balance: Zero + Copy + PartialOrd + Saturating, Hash, SplitState: Default>
-    TokenDataBuilder<Balance, Hash, SplitState>
-{
-    pub fn build(self) -> crate::types::TokenData<Balance, Hash, SplitState> {
-        crate::types::TokenData::<Balance, Hash, SplitState> {
+impl<Balance: Zero + Copy + PartialOrd + Saturating, Hash> TokenDataBuilder<Balance, Hash> {
+    pub fn build(self) -> crate::types::TokenData<Balance, Hash> {
+        crate::types::TokenData::<Balance, Hash> {
             current_total_issuance: self.current_total_issuance,
             existential_deposit: self.existential_deposit,
             issuance_state: self.issuance_state,
@@ -84,7 +82,7 @@ impl<Balance: Zero + Copy + PartialOrd + Saturating, Hash, SplitState: Default>
                 rate: Percent::zero(),
                 outstanding_credit: Balance::zero(),
             },
-            revenue_split: SplitState::default(),
+            revenue_split: SplitState::Inactive,
         }
     }
 }

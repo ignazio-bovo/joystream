@@ -4,7 +4,7 @@ use frame_support::{
     decl_module, decl_storage,
     dispatch::{fmt::Debug, marker::Copy, DispatchError, DispatchResult},
     ensure,
-    traits::{Currency, Get},
+    traits::{Currency, ExistenceRequirement, Get},
 };
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, One, Saturating, Zero};
 use sp_runtime::{traits::AccountIdConversion, ModuleId, Percent};
@@ -20,7 +20,9 @@ mod types;
 use errors::Error;
 pub use events::{Event, RawEvent};
 use traits::{PalletToken, TransferLocationTrait};
-use types::{AccountDataOf, DecOp, TokenDataOf, TokenIssuanceParametersOf, TransferPolicyOf};
+use types::{
+    AccountDataOf, DecOp, SplitState, TokenDataOf, TokenIssuanceParametersOf, TransferPolicyOf,
+};
 
 /// Pallet Configuration Trait
 pub trait Trait: frame_system::Trait {
@@ -342,11 +344,20 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     }
 
     /// Issue a revenue split for the token
+    /// Preconditions:
+    /// - `start` block must be >= than the current block
+    /// - `duration` must be >= than `MinRevenueSplitDuration`
+    /// - specified `reserve_source` free balance must exist and have free balence equal at least to `allocation`
+    ///
+    /// PostConditions
+    /// - Revenue split with `(allocation, treasury_account)` activated for `token_id`
+    /// - `allocation` transferred from `reserve_source` into `treasury_account`
+    /// no-op if allocation is 0
     fn issue_revenue_split(
         token_id: T::TokenId,
         start: T::BlockNumber,
         duration: T::BlockNumber,
-        reserve_treasury: T::AccountId,
+        reserve_source: T::AccountId,
         allocation: Self::ReserveBalance,
     ) -> DispatchResult {
         let _token_info = Self::ensure_token_exists(token_id)?;
@@ -361,9 +372,29 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
             Error::<T>::RevenueSplitDurationTooShort,
         );
 
-        let _treasury_account: T::AccountId = T::ModuleId::get().into_sub_account(token_id);
+        ensure!(
+            T::ReserveCurrency::free_balance(&reserve_source) >= allocation,
+            Error::<T>::InsufficientBalanceForSpecifiedAllocation
+        );
 
         // == MUTATION SAFE ==
+
+        // tranfer allocation keeping the source account alive
+        let treasury_account: T::AccountId = T::ModuleId::get().into_sub_account(token_id);
+        T::ReserveCurrency::transfer(
+            &reserve_source,
+            &treasury_account,
+            allocation,
+            ExistenceRequirement::KeepAlive,
+        );
+
+        TokenInfoById::<T>::mutate(token_id, |token_info| {
+            token_info.revenue_split = SplitState::Active;
+        });
+
+        Self::deposit_event(RawEvent::RevenueSplitIssued(
+            token_id, start, duration, allocation,
+        ));
 
         Ok(())
     }
