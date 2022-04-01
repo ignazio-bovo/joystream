@@ -92,10 +92,15 @@ impl frame_system::Trait for Test {
     type SystemWeightInfo = ();
 }
 
+parameter_types! {
+    pub const MinRevenueSplitDuration: u64 = 10;
+}
+
 impl Trait for Test {
     type Event = TestEvent;
     type Balance = u64;
     type TokenId = u64;
+    type MinRevenueSplitDuration = MinRevenueSplitDuration;
 }
 
 /// Genesis config builder
@@ -158,10 +163,6 @@ macro_rules! balance {
 // Modules aliases
 pub type Token = crate::Module<Test>;
 pub type System = frame_system::Module<Test>;
-
-pub const DEFAULT_EXISTENTIAL_DEPOSIT: u64 = 5;
-pub const DEFAULT_FREE_BALANCE: u64 = 10;
-pub const DEFAULT_ACCOUNT_ID: u64 = 1;
 
 // Merkle tree Helpers
 #[derive(Debug)]

@@ -20,10 +20,11 @@ fn issue_split_fails_with_invalid_token_id() {
     let token_id = token!(1);
     let config = GenesisConfigBuilder::new_empty().build();
     let start = block!(1);
+    let duration = block!(100);
 
     build_test_externalities(config).execute_with(|| {
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, start,
+            token_id, start, duration,
         );
 
         assert_noop!(result, Error::<Test>::TokenDoesNotExist);
@@ -38,14 +39,34 @@ fn issue_split_fails_with_invalid_starting_block() {
         .with_token(token_id, token_data)
         .build();
     let start = block!(1);
+    let duration = block!(100);
 
     build_test_externalities(config).execute_with(|| {
         increase_block_number_by(block!(2));
 
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, start,
+            token_id, start, duration,
         );
 
         assert_noop!(result, Error::<Test>::StartingBlockLowerThanCurrentBlock);
+    })
+}
+
+#[test]
+fn issue_split_fails_with_duration_too_short() {
+    let token_id = token!(1);
+    let token_data = TokenDataBuilder::new_empty().build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .build();
+    let start = block!(1);
+    let duration = MinRevenueSplitDuration::get() - block!(1);
+
+    build_test_externalities(config).execute_with(|| {
+        let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
+            token_id, start, duration,
+        );
+
+        assert_noop!(result, Error::<Test>::RevenueSplitDurationTooShort);
     })
 }

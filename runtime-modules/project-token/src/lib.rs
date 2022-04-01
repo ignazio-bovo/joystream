@@ -4,6 +4,7 @@ use frame_support::{
     decl_module, decl_storage,
     dispatch::{fmt::Debug, marker::Copy, DispatchError, DispatchResult},
     ensure,
+    traits::Get,
 };
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, One, Saturating, Zero};
 use sp_runtime::{traits::Hash, Percent};
@@ -32,6 +33,9 @@ pub trait Trait: frame_system::Trait {
 
     /// The token identifier used
     type TokenId: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug;
+
+    /// Min revenue split duration bound
+    type MinRevenueSplitDuration: Get<Self::BlockNumber>;
 }
 
 decl_storage! {
@@ -329,7 +333,11 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     }
 
     /// Issue a revenue split for the token
-    fn issue_revenue_split(token_id: T::TokenId, start: T::BlockNumber) -> DispatchResult {
+    fn issue_revenue_split(
+        token_id: T::TokenId,
+        start: T::BlockNumber,
+        duration: T::BlockNumber,
+    ) -> DispatchResult {
         let _token_info = Self::ensure_token_exists(token_id)?;
 
         ensure!(
@@ -337,6 +345,10 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
             Error::<T>::StartingBlockLowerThanCurrentBlock
         );
 
+        ensure!(
+            duration >= T::MinRevenueSplitDuration::get(),
+            Error::<T>::RevenueSplitDurationTooShort,
+        );
         // == MUTATION SAFE ==
 
         Ok(())

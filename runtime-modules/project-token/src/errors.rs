@@ -41,5 +41,8 @@ decl_error! {
 
         /// Starting Block Lower than current block
         StartingBlockLowerThanCurrentBlock,
+
+        /// Revenue Split duration is too short
+        RevenueSplitDurationTooShort,
     }
 }

@@ -66,7 +66,11 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
     fn claim_patronage_credit(token_id: Self::TokenId, to_account: AccountId) -> DispatchResult;
 
     /// Issue a revenue split for the token
-    fn issue_revenue_split(token_id: Self::TokenId, start: Self::BlockNumber) -> DispatchResult;
+    fn issue_revenue_split(
+        token_id: Self::TokenId,
+        start: Self::BlockNumber,
+        duration: Self::BlockNumber,
+    ) -> DispatchResult;
 
     /// Participate to the token revenue split if ongoing
     fn participate_to_split(token_id: Self::TokenId) -> DispatchResult;
