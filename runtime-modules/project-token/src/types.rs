@@ -48,7 +48,7 @@ pub struct AccountData<Balance> {
 // TODO: add extra type for Reserve = JOY balance different from CRT balance?
 /// Info for the token
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
-pub struct TokenData<Balance, Hash> {
+pub struct TokenData<Balance, Hash, BlockNumber> {
     /// Current token issuance
     pub(crate) current_total_issuance: Balance,
 
@@ -65,17 +65,27 @@ pub struct TokenData<Balance, Hash> {
     pub(crate) patronage_info: PatronageData<Balance>,
 
     /// Revenue Split state info
-    pub(crate) revenue_split: SplitState,
+    pub(crate) revenue_split: SplitState<BlockNumber>,
 }
 
 /// Revenue Split State Information
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
-pub enum SplitState {
+pub enum SplitState<BlockNumber> {
     /// Inactive state: no split ongoing
     Inactive,
 
     /// Active state: split ongoing with info
-    Active,
+    Active(SplitTimeline<BlockNumber>),
+}
+
+/// Revenue Split State Information
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
+pub struct SplitTimeline<BlockNumber> {
+    /// Inactive state: no split ongoing
+    pub(crate) start: BlockNumber,
+
+    /// Active state: split ongoing with info
+    pub(crate) duration: BlockNumber,
 }
 
 /// Patronage information
@@ -300,9 +310,64 @@ impl<AccountId: Encode, Hasher: Hash> VerifiableLocation<AccountId, Hasher> {
     }
 }
 
-impl Default for SplitState {
+impl<BlockNumber> Default for SplitState<BlockNumber> {
     fn default() -> Self {
         SplitState::Inactive
+    }
+}
+
+impl<BlockNumber: Clone> SplitState<BlockNumber> {
+    pub(crate) fn is_active(&self) -> bool {
+        matches!(self, SplitState::Active(_))
+    }
+
+    pub(crate) fn is_inactive(&self) -> bool {
+        matches!(self, SplitState::Inactive)
+    }
+
+    pub(crate) fn activate(&mut self, timeline: SplitTimeline<BlockNumber>) {
+        *self = SplitState::<BlockNumber>::Active(timeline);
+    }
+}
+
+/// Auxiliary type: timeline parameters
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
+pub struct SplitTimelineParameters<BlockNumber> {
+    pub(crate) start: BlockNumber,
+    pub(crate) duration: BlockNumber,
+}
+
+impl<BlockNumber: Copy + Saturating + PartialOrd> SplitTimelineParameters<BlockNumber> {
+    pub fn new(start: BlockNumber, duration: BlockNumber) -> Self {
+        Self { start, duration }
+    }
+
+    pub(crate) fn try_build<T: crate::Trait>(
+        self,
+        now: BlockNumber,
+        min_duration: BlockNumber,
+    ) -> Result<SplitTimeline<BlockNumber>, DispatchError> {
+        ensure!(
+            self.start >= now,
+            crate::Error::<T>::StartingBlockLowerThanCurrentBlock
+        );
+
+        ensure!(
+            self.duration >= min_duration,
+            crate::Error::<T>::RevenueSplitDurationTooShort,
+        );
+
+        Ok(SplitTimeline::<_>::new(self.start, self.duration))
+    }
+}
+
+impl<BlockNumber: Copy + Saturating + PartialOrd> SplitTimeline<BlockNumber> {
+    pub(crate) fn is_ongoing(&self, now: BlockNumber) -> bool {
+        self.end() >= now
+    }
+
+    pub(crate) fn end(&self) -> BlockNumber {
+        self.start.saturating_add(self.duration)
     }
 }
 
@@ -310,9 +375,20 @@ impl Default for SplitState {
 /// Alias for Account Data
 pub(crate) type AccountDataOf<T> = AccountData<<T as crate::Trait>::Balance>;
 
+/// Alias for the Timeline type
+pub(crate) type SplitTimelineOf<T> = SplitTimeline<<T as frame_system::Trait>::BlockNumber>;
+pub(crate) type TimelineParamsOf<T> =
+    SplitTimelineParameters<<T as frame_system::Trait>::BlockNumber>;
+
+/// Alias for the Split state type
+pub(crate) type SplitStateOf<T> = SplitState<<T as frame_system::Trait>::BlockNumber>;
+
 /// Alias for Token Data
-pub(crate) type TokenDataOf<T> =
-    TokenData<<T as crate::Trait>::Balance, <T as frame_system::Trait>::Hash>;
+pub(crate) type TokenDataOf<T> = TokenData<
+    <T as crate::Trait>::Balance,
+    <T as frame_system::Trait>::Hash,
+    <T as frame_system::Trait>::BlockNumber,
+>;
 
 /// Alias for Token Issuance Parameters
 pub(crate) type TokenIssuanceParametersOf<T> =

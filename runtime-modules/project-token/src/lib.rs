@@ -21,7 +21,8 @@ use errors::Error;
 pub use events::{Event, RawEvent};
 use traits::{PalletToken, TransferLocationTrait};
 use types::{
-    AccountDataOf, DecOp, SplitState, TokenDataOf, TokenIssuanceParametersOf, TransferPolicyOf,
+    AccountDataOf, DecOp, SplitState, SplitStateOf, SplitTimelineOf, TimelineParamsOf, TokenDataOf,
+    TokenIssuanceParametersOf, TransferPolicyOf,
 };
 
 /// Pallet Configuration Trait
@@ -89,6 +90,8 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     type ReserveBalance = <T::ReserveCurrency as Currency<T::AccountId>>::Balance;
 
     type TokenId = T::TokenId;
+
+    type SplitTimelineParameters = TimelineParamsOf<T>;
 
     type BlockNumber = <T as frame_system::Trait>::BlockNumber;
 
@@ -355,22 +358,21 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     /// no-op if allocation is 0
     fn issue_revenue_split(
         token_id: T::TokenId,
-        start: T::BlockNumber,
-        duration: T::BlockNumber,
+        timeline_params: TimelineParamsOf<T>,
         reserve_source: T::AccountId,
         allocation: Self::ReserveBalance,
     ) -> DispatchResult {
-        let _token_info = Self::ensure_token_exists(token_id)?;
+        let token_info = Self::ensure_token_exists(token_id)?;
 
         ensure!(
-            start >= <frame_system::Module<T>>::block_number(),
-            Error::<T>::StartingBlockLowerThanCurrentBlock
+            token_info.revenue_split.is_inactive(),
+            Error::<T>::RevenueSplitAlreadyActiveForToken
         );
 
-        ensure!(
-            duration >= T::MinRevenueSplitDuration::get(),
-            Error::<T>::RevenueSplitDurationTooShort,
-        );
+        let timeline = timeline_params.try_build::<T>(
+            <frame_system::Module<T>>::block_number(),
+            T::MinRevenueSplitDuration::get(),
+        )?;
 
         ensure!(
             T::ReserveCurrency::free_balance(&reserve_source) >= allocation,
@@ -389,11 +391,14 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         );
 
         TokenInfoById::<T>::mutate(token_id, |token_info| {
-            token_info.revenue_split = SplitState::Active;
+            token_info.revenue_split.activate(timeline);
         });
 
         Self::deposit_event(RawEvent::RevenueSplitIssued(
-            token_id, start, duration, allocation,
+            token_id,
+            timeline.start,
+            timeline.duration,
+            allocation,
         ));
 
         Ok(())

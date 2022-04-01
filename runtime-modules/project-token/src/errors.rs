@@ -48,5 +48,8 @@ decl_error! {
         /// Insufficient Balance for Specified Allocation
         InsufficientBalanceForSpecifiedAllocation,
 
+        /// Attempt to activate split with one ongoing
+        RevenueSplitAlreadyActiveForToken,
+
     }
 }

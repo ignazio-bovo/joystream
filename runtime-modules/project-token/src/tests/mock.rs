@@ -14,7 +14,7 @@ use sp_runtime::ModuleId;
 
 // crate import
 use crate::{
-    types::{MerkleSide, SimpleLocation, SplitState, VerifiableLocation},
+    types::{MerkleSide, SimpleLocation, TimelineParamsOf, VerifiableLocation},
     AccountDataOf, GenesisConfig, TokenDataOf, TokenIssuanceParametersOf, Trait, TransferPolicyOf,
 };
 
@@ -32,6 +32,7 @@ pub type Hashing = <Test as frame_system::Trait>::Hashing;
 pub type HashOut = <Test as frame_system::Trait>::Hash;
 pub type Verifiable = VerifiableLocation<AccountId, Hashing>;
 pub type BlockNumber = <Test as frame_system::Trait>::BlockNumber;
+pub type TimelineParams = TimelineParamsOf<Test>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;

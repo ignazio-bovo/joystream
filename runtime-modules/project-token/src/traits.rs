@@ -24,6 +24,9 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
     /// Reserve Balance used (JOY balance)
     type ReserveBalance;
 
+    /// Parameters used for Split timeline consruction
+    type SplitTimelineParameters;
+
     /// Mint `amount` into account `who` (possibly creating it)
     fn deposit_creating(
         token_id: Self::TokenId,
@@ -62,7 +65,7 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
     /// Reduce patronage rate by amount
     fn reduce_patronage_rate_by(token_id: Self::TokenId, decrement: Percent) -> DispatchResult;
 
-    /// Query for patronage credit for token    
+    /// Query for patronage credit for token
     fn get_patronage_credit(token_id: Self::TokenId) -> Result<Self::Balance, DispatchError>;
 
     /// Allow creator to receive credit into his accounts
@@ -71,8 +74,7 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
     /// Issue a revenue split for the token
     fn issue_revenue_split(
         token_id: Self::TokenId,
-        start: Self::BlockNumber,
-        duration: Self::BlockNumber,
+        timeline_params: Self::SplitTimelineParameters,
         reserve_source: AccountId,
         allocation: Self::ReserveBalance,
     ) -> DispatchResult;
