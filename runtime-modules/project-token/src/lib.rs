@@ -362,6 +362,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         timeline_params: TimelineParamsOf<T>,
         reserve_source: T::AccountId,
         allocation: Self::ReserveBalance,
+        percentage: Percent,
     ) -> DispatchResult {
         let token_info = Self::ensure_token_exists(token_id)?;
 
@@ -392,7 +393,9 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         );
 
         TokenInfoById::<T>::mutate(token_id, |token_info| {
-            token_info.revenue_split.activate(timeline.clone());
+            token_info
+                .revenue_split
+                .activate(timeline.clone(), percentage);
         });
 
         Self::deposit_event(RawEvent::RevenueSplitIssued(
@@ -406,7 +409,12 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     }
 
     /// Participate to the token revenue split if ongoing
-    fn participate_to_split(token_id: T::TokenId) -> DispatchResult {
+    fn participate_to_split(_token_id: T::TokenId) -> DispatchResult {
+        todo!()
+    }
+
+    /// Participate to the token revenue split if ongoing
+    fn finalize_revenue_split(token_id: T::TokenId, account_id: T::AccountId) -> DispatchResult {
         todo!()
     }
 }

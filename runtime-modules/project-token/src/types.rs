@@ -75,7 +75,7 @@ pub enum SplitState<BlockNumber> {
     Inactive,
 
     /// Active state: split ongoing with info
-    Active(SplitTimeline<BlockNumber>),
+    Active(SplitTimeline<BlockNumber>, Percent),
 }
 
 /// Revenue Split State Information
@@ -318,15 +318,15 @@ impl<BlockNumber> Default for SplitState<BlockNumber> {
 
 impl<BlockNumber: Clone> SplitState<BlockNumber> {
     pub(crate) fn is_active(&self) -> bool {
-        matches!(self, SplitState::Active(_))
+        matches!(self, SplitState::Active(..))
     }
 
     pub(crate) fn is_inactive(&self) -> bool {
         matches!(self, SplitState::Inactive)
     }
 
-    pub(crate) fn activate(&mut self, timeline: SplitTimeline<BlockNumber>) {
-        *self = SplitState::<BlockNumber>::Active(timeline);
+    pub(crate) fn activate(&mut self, timeline: SplitTimeline<BlockNumber>, percentage: Percent) {
+        *self = SplitState::<BlockNumber>::Active(timeline, percentage);
     }
 }
 

@@ -1,6 +1,6 @@
 #[cfg(test)]
 use frame_support::{assert_noop, assert_ok, traits::Currency};
-use sp_runtime::traits::AccountIdConversion;
+use sp_runtime::{traits::AccountIdConversion, Percent};
 
 use crate::tests::mock::*;
 use crate::tests::test_utils::{increase_account_balance, TokenDataBuilder};
@@ -35,11 +35,12 @@ fn issue_split_fails_with_invalid_token_id() {
     let config = GenesisConfigBuilder::new_empty().build();
     let timeline_p = time_params!(block!(1), block!(10));
     let (src, allocation) = (account!(1), joys!(100));
+    let percentage = Percent::from_percent(10);
 
     build_test_externalities(config).execute_with(|| {
         increase_account_balance(src, allocation);
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id, timeline_p, src, allocation, percentage,
         );
 
         assert_noop!(result, Error::<Test>::TokenDoesNotExist);
@@ -55,13 +56,14 @@ fn issue_split_fails_with_invalid_starting_block() {
         .build();
     let timeline_p = time_params!(block!(1), block!(10));
     let (src, allocation) = (account!(1), joys!(100));
+    let percentage = Percent::from_percent(10);
 
     build_test_externalities(config).execute_with(|| {
         increase_account_balance(src, allocation);
         increase_block_number_by(block!(2));
 
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id, timeline_p, src, allocation, percentage,
         );
 
         assert_noop!(result, Error::<Test>::StartingBlockLowerThanCurrentBlock);
@@ -74,6 +76,7 @@ fn issue_split_fails_with_duration_too_short() {
     let token_data = TokenDataBuilder::new_empty().build();
     let timeline_p = time_params!(block!(1), MinRevenueSplitDuration::get() - block!(1));
     let (src, allocation) = (account!(1), joys!(100));
+    let percentage = Percent::from_percent(10);
 
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
@@ -83,7 +86,7 @@ fn issue_split_fails_with_duration_too_short() {
         increase_account_balance(src, allocation);
 
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id, timeline_p, src, allocation, percentage,
         );
 
         assert_noop!(result, Error::<Test>::RevenueSplitDurationTooShort);
@@ -96,6 +99,7 @@ fn issue_split_fails_with_source_having_insufficient_balance() {
     let token_data = TokenDataBuilder::new_empty().build();
     let timeline_p = time_params!(block!(1), block!(10));
     let (src, allocation) = (account!(1), joys!(100));
+    let percentage = Percent::from_percent(10);
 
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
@@ -105,7 +109,7 @@ fn issue_split_fails_with_source_having_insufficient_balance() {
         increase_account_balance(src, joys!(0));
 
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id, timeline_p, src, allocation, percentage,
         );
 
         assert_noop!(
@@ -120,9 +124,10 @@ fn issue_split_fails_with_split_already_active() {
     let token_id = token!(1);
     let timeline_p = time_params!(block!(1), block!(10));
     let (src, allocation) = (account!(1), joys!(50));
+    let percentage = Percent::from_percent(10);
 
     let token_data = TokenDataBuilder::new_empty()
-        .with_revenue_split((timeline_p.start, timeline_p.duration))
+        .with_revenue_split((timeline_p.start, timeline_p.duration), percentage)
         .build();
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
@@ -132,7 +137,7 @@ fn issue_split_fails_with_split_already_active() {
         increase_account_balance(src, joys!(100));
 
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id, timeline_p, src, allocation, percentage,
         );
 
         assert_noop!(result, Error::<Test>::RevenueSplitAlreadyActiveForToken);
@@ -144,6 +149,7 @@ fn issue_split_fails_with_non_existing_source_account() {
     let token_id = token!(1);
     let token_data = TokenDataBuilder::new_empty().build();
     let timeline_p = time_params!(block!(1), block!(10));
+    let percentage = Percent::from_percent(10);
     let (src, allocation) = (account!(1), joys!(100));
 
     let config = GenesisConfigBuilder::new_empty()
@@ -152,7 +158,7 @@ fn issue_split_fails_with_non_existing_source_account() {
 
     build_test_externalities(config).execute_with(|| {
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id, timeline_p, src, allocation, percentage,
         );
 
         assert_noop!(
@@ -168,6 +174,7 @@ fn issue_split_ok() {
     let token_data = TokenDataBuilder::new_empty().build();
     let timeline_p = time_params!(block!(1), block!(10));
     let (src, allocation) = (account!(1), joys!(100));
+    let percentage = Percent::from_percent(10);
 
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
@@ -177,7 +184,7 @@ fn issue_split_ok() {
         increase_account_balance(src, allocation);
 
         let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id, timeline_p, src, allocation, percentage,
         );
 
         assert_ok!(result);
@@ -190,6 +197,7 @@ fn issue_split_ok_with_event_deposit() {
     let token_data = TokenDataBuilder::new_empty().build();
     let timeline_p = time_params!(block!(1), block!(10));
     let (src, allocation) = (account!(1), joys!(100));
+    let percentage = Percent::from_percent(10);
 
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
@@ -203,6 +211,7 @@ fn issue_split_ok_with_event_deposit() {
             timeline_p.clone(),
             src,
             allocation,
+            percentage,
         );
 
         last_event_eq!(RawEvent::RevenueSplitIssued(
@@ -218,6 +227,7 @@ fn issue_split_ok_with_event_deposit() {
 fn issue_split_ok_with_correct_activation() {
     let token_id = token!(1);
     let token_data = TokenDataBuilder::new_empty().build();
+    let percentage = Percent::from_percent(10);
     let timeline_p = time_params!(block!(1), block!(10));
     let (src, allocation) = (account!(1), joys!(100));
 
@@ -233,14 +243,18 @@ fn issue_split_ok_with_correct_activation() {
             timeline_p.clone(),
             src,
             allocation,
+            percentage,
         );
 
         assert_eq!(
             Token::token_info_by_id(token_id).revenue_split,
-            SplitStateOf::Active(SplitTimelineOf {
-                start: timeline_p.start,
-                duration: timeline_p.duration
-            }),
+            SplitStateOf::Active(
+                SplitTimelineOf {
+                    start: timeline_p.start,
+                    duration: timeline_p.duration
+                },
+                percentage
+            ),
         );
     })
 }
@@ -252,6 +266,7 @@ fn issue_split_ok_with_allocation_transfer() {
     let timeline_p = time_params!(block!(1), block!(10));
     let (src, allocation) = (account!(1), joys!(100));
     let treasury = TokenModuleId::get().into_sub_account(token_id);
+    let percentage = Percent::from_percent(10);
 
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
@@ -261,7 +276,7 @@ fn issue_split_ok_with_allocation_transfer() {
         increase_account_balance(src, allocation);
 
         let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id, timeline_p, src, allocation, percentage,
         );
 
         assert_eq!(Balances::total_balance(&treasury), allocation);
