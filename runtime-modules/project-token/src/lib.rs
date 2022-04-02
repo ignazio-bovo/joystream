@@ -403,6 +403,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
             timeline.start,
             timeline.duration,
             allocation,
+            percentage,
         ));
 
         Ok(())

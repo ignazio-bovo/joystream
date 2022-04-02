@@ -46,17 +46,11 @@ impl<Balance: Zero + Copy + PartialOrd + Saturating, Hash, BlockNumber>
 
     pub fn with_revenue_split(
         self,
-        timeline: (BlockNumber, BlockNumber),
+        timeline: SplitTimeline<BlockNumber>,
         percentage: Percent,
     ) -> Self {
         Self {
-            revenue_split: SplitState::<BlockNumber>::Active(
-                SplitTimeline::<BlockNumber> {
-                    start: timeline.0,
-                    duration: timeline.1,
-                },
-                percentage,
-            ),
+            revenue_split: SplitState::<BlockNumber>::Active(timeline, percentage),
             ..self
         }
     }

@@ -72,6 +72,14 @@ decl_event! {
         /// - start of the split
         /// - duration of the split
         /// - JOY allocation
-        RevenueSplitIssued(TokenId, BlockNumber, BlockNumber, ReserveBalance),
+        RevenueSplitIssued(TokenId, BlockNumber, BlockNumber, ReserveBalance, Percent),
+
+        /// Revenue Split issued
+        /// Params:
+        /// - token identifier
+        /// - recovery account for the leftover funds
+        /// - leftover funds
+        RevenueSplitFinalized(TokenId, AccountId, ReserveBalance),
+
     }
 }
