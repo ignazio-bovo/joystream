@@ -416,7 +416,30 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 
     /// Participate to the token revenue split if ongoing
     fn finalize_revenue_split(token_id: T::TokenId, account_id: T::AccountId) -> DispatchResult {
-        todo!()
+        let token_info = Self::ensure_token_exists(token_id)?;
+
+        let timeline = token_info.revenue_split.ensure_active::<T>()?;
+
+        let now = <frame_system::Module<T>>::block_number();
+        ensure!(!timeline.is_ongoing(now), Error::<T>::RevenueSplitDidNotEnd);
+
+        // = MUTATION SAFE =
+
+        let treasury_account: T::AccountId = T::ModuleId::get().into_sub_account(token_id);
+        let leftovers = T::ReserveCurrency::free_balance(&treasury_account);
+        let _ = T::ReserveCurrency::transfer(
+            &treasury_account,
+            &account_id,
+            leftovers,
+            ExistenceRequirement::KeepAlive,
+        );
+
+        TokenInfoById::<T>::mutate(token_id, |token_info| token_info.revenue_split.deactivate());
+
+        Self::deposit_event(RawEvent::RevenueSplitFinalized(
+            token_id, account_id, leftovers,
+        ));
+        Ok(())
     }
 }
 

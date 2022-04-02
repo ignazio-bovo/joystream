@@ -373,7 +373,7 @@ fn finalize_split_fails_with_split_end_block_not_reached() {
                 token_id, src,
             );
 
-        assert_noop!(result, Error::<Test>::RevenueSplitNotActiveForToken);
+        assert_noop!(result, Error::<Test>::RevenueSplitDidNotEnd);
     })
 }
 

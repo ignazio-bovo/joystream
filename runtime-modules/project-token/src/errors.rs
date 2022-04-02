@@ -54,5 +54,8 @@ decl_error! {
         /// Attempt to make revenue split operations with token not in active split state
         RevenueSplitNotActiveForToken,
 
+        /// Revenue Split has not ended yet
+        RevenueSplitDidNotEnd,
+
     }
 }

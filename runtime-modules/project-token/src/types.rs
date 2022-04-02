@@ -325,8 +325,23 @@ impl<BlockNumber: Clone> SplitState<BlockNumber> {
         matches!(self, SplitState::Inactive)
     }
 
+    pub(crate) fn ensure_active<T: crate::Trait>(
+        &self,
+    ) -> Result<SplitTimeline<BlockNumber>, DispatchError> {
+        match self {
+            SplitState::<BlockNumber>::Active(timeline, _) => Ok(timeline.clone()),
+            SplitState::<BlockNumber>::Inactive => {
+                Err(crate::Error::<T>::RevenueSplitNotActiveForToken.into())
+            }
+        }
+    }
+
     pub(crate) fn activate(&mut self, timeline: SplitTimeline<BlockNumber>, percentage: Percent) {
         *self = SplitState::<BlockNumber>::Active(timeline, percentage);
+    }
+
+    pub(crate) fn deactivate(&mut self) {
+        *self = SplitState::<BlockNumber>::Inactive;
     }
 }
 
