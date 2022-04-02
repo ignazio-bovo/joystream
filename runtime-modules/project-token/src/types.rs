@@ -230,7 +230,7 @@ impl<Balance: Zero + Copy + PartialOrd + Saturating> AccountData<Balance> {
     }
 }
 /// Token Data implementation
-impl<Balance, Hash> TokenData<Balance, Hash> {
+impl<Balance, Hash, BlockNumber> TokenData<Balance, Hash, BlockNumber> {
     // validate transfer destination location according to self.policy
     pub(crate) fn ensure_valid_location_for_policy<T, AccountId, Location>(
         &self,
@@ -362,6 +362,10 @@ impl<BlockNumber: Copy + Saturating + PartialOrd> SplitTimelineParameters<BlockN
 }
 
 impl<BlockNumber: Copy + Saturating + PartialOrd> SplitTimeline<BlockNumber> {
+    pub(crate) fn new(start: BlockNumber, duration: BlockNumber) -> Self {
+        Self { start, duration }
+    }
+
     pub(crate) fn is_ongoing(&self, now: BlockNumber) -> bool {
         self.end() >= now
     }
@@ -375,13 +379,9 @@ impl<BlockNumber: Copy + Saturating + PartialOrd> SplitTimeline<BlockNumber> {
 /// Alias for Account Data
 pub(crate) type AccountDataOf<T> = AccountData<<T as crate::Trait>::Balance>;
 
-/// Alias for the Timeline type
-pub(crate) type SplitTimelineOf<T> = SplitTimeline<<T as frame_system::Trait>::BlockNumber>;
+/// Alias for Timeline parameters
 pub(crate) type TimelineParamsOf<T> =
     SplitTimelineParameters<<T as frame_system::Trait>::BlockNumber>;
-
-/// Alias for the Split state type
-pub(crate) type SplitStateOf<T> = SplitState<<T as frame_system::Trait>::BlockNumber>;
 
 /// Alias for Token Data
 pub(crate) type TokenDataOf<T> = TokenData<

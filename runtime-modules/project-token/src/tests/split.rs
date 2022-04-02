@@ -5,7 +5,6 @@ use sp_runtime::traits::AccountIdConversion;
 use crate::tests::mock::*;
 use crate::tests::test_utils::{increase_account_balance, TokenDataBuilder};
 use crate::traits::PalletToken;
-use crate::types::{SplitStateOf, SplitTimelineOf};
 use crate::{account, last_event_eq, token, Error, RawEvent};
 
 // helper macros
@@ -119,10 +118,12 @@ fn issue_split_fails_with_source_having_insufficient_balance() {
 #[test]
 fn issue_split_fails_with_split_already_active() {
     let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty().build();
     let timeline_p = time_params!(block!(1), block!(10));
     let (src, allocation) = (account!(1), joys!(50));
 
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split((timeline_p.start, timeline_p.duration))
+        .build();
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
         .build();
@@ -198,7 +199,10 @@ fn issue_split_ok_with_event_deposit() {
         increase_account_balance(src, allocation);
 
         let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id,
+            timeline_p.clone(),
+            src,
+            allocation,
         );
 
         last_event_eq!(RawEvent::RevenueSplitIssued(
@@ -225,12 +229,15 @@ fn issue_split_ok_with_correct_activation() {
         increase_account_balance(src, allocation);
 
         let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::issue_revenue_split(
-            token_id, timeline_p, src, allocation,
+            token_id,
+            timeline_p.clone(),
+            src,
+            allocation,
         );
 
         assert_eq!(
             Token::token_info_by_id(token_id).revenue_split,
-            SplitStateOf::<Test>::Active(SplitTimelineOf::<Test> {
+            SplitStateOf::Active(SplitTimelineOf {
                 start: timeline_p.start,
                 duration: timeline_p.duration
             }),

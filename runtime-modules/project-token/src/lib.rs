@@ -21,8 +21,8 @@ use errors::Error;
 pub use events::{Event, RawEvent};
 use traits::{PalletToken, TransferLocationTrait};
 use types::{
-    AccountDataOf, DecOp, SplitState, SplitStateOf, SplitTimelineOf, TimelineParamsOf, TokenDataOf,
-    TokenIssuanceParametersOf, TransferPolicyOf,
+    AccountDataOf, DecOp, TimelineParamsOf, TokenDataOf, TokenIssuanceParametersOf,
+    TransferPolicyOf,
 };
 
 /// Pallet Configuration Trait
@@ -351,6 +351,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     /// - `start` block must be >= than the current block
     /// - `duration` must be >= than `MinRevenueSplitDuration`
     /// - specified `reserve_source` free balance must exist and have free balence equal at least to `allocation`
+    /// - revenue split status for `token_id` must be inactive
     ///
     /// PostConditions
     /// - Revenue split with `(allocation, treasury_account)` activated for `token_id`
@@ -383,7 +384,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 
         // tranfer allocation keeping the source account alive
         let treasury_account: T::AccountId = T::ModuleId::get().into_sub_account(token_id);
-        T::ReserveCurrency::transfer(
+        let _ = T::ReserveCurrency::transfer(
             &reserve_source,
             &treasury_account,
             allocation,
@@ -391,7 +392,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         );
 
         TokenInfoById::<T>::mutate(token_id, |token_info| {
-            token_info.revenue_split.activate(timeline);
+            token_info.revenue_split.activate(timeline.clone());
         });
 
         Self::deposit_event(RawEvent::RevenueSplitIssued(

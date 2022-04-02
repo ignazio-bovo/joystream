@@ -6,7 +6,7 @@ use frame_support::{
 };
 
 use codec::Encode;
-use sp_arithmetic::{traits::One, Perbill};
+use sp_arithmetic::Perbill;
 use sp_io::TestExternalities;
 use sp_runtime::testing::{Header, H256};
 use sp_runtime::traits::{BlakeTwo256, Hash, IdentityLookup};
@@ -14,7 +14,9 @@ use sp_runtime::ModuleId;
 
 // crate import
 use crate::{
-    types::{MerkleSide, SimpleLocation, TimelineParamsOf, VerifiableLocation},
+    types::{
+        MerkleSide, SimpleLocation, SplitState, SplitTimeline, TimelineParamsOf, VerifiableLocation,
+    },
     AccountDataOf, GenesisConfig, TokenDataOf, TokenIssuanceParametersOf, Trait, TransferPolicyOf,
 };
 
@@ -33,6 +35,8 @@ pub type HashOut = <Test as frame_system::Trait>::Hash;
 pub type Verifiable = VerifiableLocation<AccountId, Hashing>;
 pub type BlockNumber = <Test as frame_system::Trait>::BlockNumber;
 pub type TimelineParams = TimelineParamsOf<Test>;
+pub type SplitStateOf = SplitState<<Test as frame_system::Trait>::BlockNumber>;
+pub type SplitTimelineOf = SplitTimeline<<Test as frame_system::Trait>::BlockNumber>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;

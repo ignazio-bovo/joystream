@@ -4,21 +4,23 @@ use sp_runtime::traits::Hash;
 use sp_runtime::Percent;
 
 use crate::tests::mock::*;
-use crate::types::{IssuanceState, PatronageData, SplitState, TransferPolicy};
+use crate::types::{IssuanceState, PatronageData, SplitState, SplitTimeline, TransferPolicy};
 use crate::GenesisConfig;
 
-pub struct TokenDataBuilder<Balance, Hash> {
+pub struct TokenDataBuilder<Balance, Hash, BlockNumber> {
     pub(crate) current_total_issuance: Balance,
     pub(crate) existential_deposit: Balance,
     pub(crate) issuance_state: IssuanceState,
     pub(crate) transfer_policy: TransferPolicy<Hash>,
     pub(crate) patronage_info: PatronageData<Balance>,
-    pub(crate) revenue_split: SplitState,
+    pub(crate) revenue_split: SplitState<BlockNumber>,
 }
 
-impl<Balance: Zero + Copy + PartialOrd + Saturating, Hash> TokenDataBuilder<Balance, Hash> {
-    pub fn build(self) -> crate::types::TokenData<Balance, Hash> {
-        crate::types::TokenData::<Balance, Hash> {
+impl<Balance: Zero + Copy + PartialOrd + Saturating, Hash, BlockNumber>
+    TokenDataBuilder<Balance, Hash, BlockNumber>
+{
+    pub fn build(self) -> crate::types::TokenData<Balance, Hash, BlockNumber> {
+        crate::types::TokenData::<Balance, Hash, BlockNumber> {
             current_total_issuance: self.current_total_issuance,
             existential_deposit: self.existential_deposit,
             issuance_state: self.issuance_state,
@@ -38,6 +40,16 @@ impl<Balance: Zero + Copy + PartialOrd + Saturating, Hash> TokenDataBuilder<Bala
     pub fn with_existential_deposit(self, existential_deposit: Balance) -> Self {
         Self {
             existential_deposit,
+            ..self
+        }
+    }
+
+    pub fn with_revenue_split(self, timeline: (BlockNumber, BlockNumber)) -> Self {
+        Self {
+            revenue_split: SplitState::<BlockNumber>::Active(SplitTimeline::<BlockNumber> {
+                start: timeline.0,
+                duration: timeline.1,
+            }),
             ..self
         }
     }
