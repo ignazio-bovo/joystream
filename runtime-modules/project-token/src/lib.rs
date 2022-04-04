@@ -432,7 +432,9 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
             account_info.reserved_balance = account_info.reserved_balance.saturating_add(amount);
         });
 
-        Self::deposit_event(RawEvent::UserParticipatedToSplit(token_id, who, amount));
+        Self::deposit_event(RawEvent::UserParticipatedToSplit(
+            token_id, who, amount, now,
+        ));
 
         Ok(())
     }

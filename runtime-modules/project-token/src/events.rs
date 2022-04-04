@@ -71,7 +71,8 @@ decl_event! {
         /// - token identifier
         /// - start of the split
         /// - duration of the split
-        /// - JOY allocation
+        /// - JOY allocated for the split
+        /// - % of JOY allocated for the split used for accounting
         RevenueSplitIssued(TokenId, BlockNumber, BlockNumber, ReserveBalance, Percent),
 
         /// Revenue Split issued
@@ -86,8 +87,15 @@ decl_event! {
         /// - token identifier
         /// - user account
         /// - user allocated reserved balance
-        UserParticipatedToSplit(TokenId, AccountId, Balance),
+        /// - block height
+        UserParticipatedToSplit(TokenId, AccountId, Balance, BlockNumber),
 
-
+        /// User claimed revenue split
+        /// Params:
+        /// - token identifier
+        /// - user account
+        /// - Revenue Amount in JOY
+        /// - block height
+        UserClaimedRevenueSplit(TokenId, AccountId, ReserveBalance, BlockNumber),
     }
 }
