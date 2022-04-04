@@ -571,7 +571,7 @@ fn participate_to_split_fails_with_invalid_account_id() {
                 to_stake,
             );
 
-        assert_noop!(result, Error::<Test>::TokenDoesNotExist);
+        assert_noop!(result, Error::<Test>::AccountInformationDoesNotExist);
     })
 }
 
@@ -678,7 +678,6 @@ fn participate_to_split_fails_with_previous_reserved_amount_outstanding() {
 
     build_test_externalities(config).execute_with(|| {
         increase_account_balance(treasury, allocation);
-        increase_block_number_by(timeline.end());
 
         let result =
             <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
