@@ -441,6 +441,14 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 
     /// Members can claim their split revenue
     fn claim_revenue_split_amount(token_id: T::TokenId, who: T::AccountId) -> DispatchResult {
+        let token_info = Self::ensure_token_exists(token_id)?;
+
+        let timeline = token_info.revenue_split.ensure_active::<T>()?;
+        let now = <frame_system::Module<T>>::block_number();
+        ensure!(!timeline.is_ongoing(now), Error::<T>::RevenueSplitHasEnded);
+
+        let account_info = Self::ensure_account_data_exists(token_id, &who)?;
+
         // == MUTATION SAFE ==
         todo!()
     }

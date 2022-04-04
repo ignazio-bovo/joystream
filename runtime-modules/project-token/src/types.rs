@@ -331,10 +331,6 @@ impl<BlockNumber> Default for SplitState<BlockNumber> {
 }
 
 impl<BlockNumber: Clone> SplitState<BlockNumber> {
-    pub(crate) fn is_active(&self) -> bool {
-        matches!(self, SplitState::Active(..))
-    }
-
     pub(crate) fn is_inactive(&self) -> bool {
         matches!(self, SplitState::Inactive)
     }
