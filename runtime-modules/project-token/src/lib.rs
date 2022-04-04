@@ -427,6 +427,13 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 
         // == MUTATION SAFE ==
 
+        AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_info| {
+            account_info.free_balance = account_info.free_balance.saturating_sub(amount);
+            account_info.reserved_balance = account_info.reserved_balance.saturating_add(amount);
+        });
+
+        Self::deposit_event(RawEvent::UserParticipatedToSplit(token_id, who, amount));
+
         Ok(())
     }
 
@@ -435,7 +442,6 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         let token_info = Self::ensure_token_exists(token_id)?;
 
         let timeline = token_info.revenue_split.ensure_active::<T>()?;
-
         let now = <frame_system::Module<T>>::block_number();
         ensure!(!timeline.is_ongoing(now), Error::<T>::RevenueSplitDidNotEnd);
 
