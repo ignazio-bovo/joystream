@@ -5,7 +5,7 @@ use sp_runtime::{traits::AccountIdConversion, Percent};
 use crate::tests::mock::*;
 use crate::tests::test_utils::{increase_account_balance, TokenDataBuilder};
 use crate::traits::PalletToken;
-use crate::{account, last_event_eq, token, Error, RawEvent};
+use crate::{account, balance, last_event_eq, token, Error, RawEvent};
 
 // helper macros
 #[macro_export]
@@ -40,6 +40,13 @@ macro_rules! percent {
 macro_rules! joys {
     ($b:expr) => {
         ReserveBalance::from($b as u32)
+    };
+}
+
+#[macro_export]
+macro_rules! treasury {
+    ($t:expr) => {
+        TokenModuleId::get().into_sub_account($t)
     };
 }
 
@@ -507,5 +514,275 @@ fn finalize_split_ok_with_split_status_made_inactive() {
         assert!(Token::token_info_by_id(token_id)
             .revenue_split
             .is_inactive());
+    })
+}
+
+#[test]
+fn participate_to_split_fails_with_invalid_token_id() {
+    let token_id = token!(1);
+    let timeline = timeline!(block!(1), block!(10));
+    let (treasury, allocation, percentage) = (treasury!(token_id), joys!(50), percent!(10));
+    let (participant_id, to_stake) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split(timeline.clone(), percentage)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, to_stake, 0)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+                token_id + 1,
+                participant_id,
+                to_stake,
+            );
+
+        assert_noop!(result, Error::<Test>::TokenDoesNotExist);
+    })
+}
+
+#[test]
+fn participate_to_split_fails_with_invalid_account_id() {
+    let token_id = token!(1);
+    let timeline = timeline!(block!(1), block!(10));
+    let (allocation, percentage) = (joys!(50), percent!(10));
+    let (participant_id, to_stake) = (account!(2), balance!(100));
+    let treasury = TokenModuleId::get().into_sub_account(token_id);
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split(timeline.clone(), percentage)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+                token_id,
+                participant_id,
+                to_stake,
+            );
+
+        assert_noop!(result, Error::<Test>::TokenDoesNotExist);
+    })
+}
+
+#[test]
+fn participate_to_split_fails_with_token_not_in_active_split_state() {
+    let token_id = token!(1);
+    let _timeline = timeline!(block!(1), block!(10));
+    let (treasury, allocation, _percentage) = (treasury!(token_id), joys!(50), percent!(10));
+    let (participant_id, to_stake) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty().build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, to_stake, 0)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+                token_id,
+                participant_id,
+                to_stake,
+            );
+
+        assert_noop!(result, Error::<Test>::RevenueSplitNotActiveForToken);
+    })
+}
+
+#[test]
+fn participate_to_split_fails_with_insufficient_token_to_stake() {
+    let token_id = token!(1);
+    let timeline = timeline!(block!(1), block!(10));
+    let (treasury, allocation, percentage) = (treasury!(token_id), joys!(50), percent!(10));
+    let (participant_id, to_stake) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split(timeline.clone(), percentage)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, balance!(0), 0) // 0 free balance
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+                token_id,
+                participant_id,
+                to_stake,
+            );
+
+        assert_noop!(result, Error::<Test>::InsufficientFreeBalanceForReserving);
+    })
+}
+
+#[test]
+fn participate_to_split_ok() {
+    let token_id = token!(1);
+    let timeline = timeline!(block!(1), block!(10));
+    let (treasury, allocation, percentage) = (treasury!(token_id), joys!(50), percent!(10));
+    let (participant_id, to_stake) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split(timeline.clone(), percentage)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, to_stake, 0)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+                token_id,
+                participant_id,
+                to_stake,
+            );
+
+        assert_ok!(result);
+    })
+}
+
+#[test]
+fn participate_to_split_ok_with_event_deposit() {
+    let token_id = token!(1);
+    let timeline = timeline!(block!(1), block!(10));
+    let (allocation, percentage) = (joys!(50), percent!(10));
+    let (participant_id, to_stake) = (account!(2), balance!(100));
+    let treasury = TokenModuleId::get().into_sub_account(token_id);
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split(timeline.clone(), percentage)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, to_stake, 0)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+            token_id,
+            participant_id,
+            to_stake,
+        );
+
+        last_event_eq!(RawEvent::UserParticipatedToSplit(
+            token_id,
+            participant_id,
+            to_stake
+        ))
+    })
+}
+
+#[test]
+fn participate_to_split_ok_with_user_account_not_delete_due_to_existential_deposit() {
+    let (token_id, ex_deposit) = (token!(1), balance!(10));
+    let timeline = timeline!(block!(1), block!(10));
+    let (treasury, allocation, percentage) = (treasury!(token_id), joys!(50), percent!(10));
+    let (participant_id, to_stake) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split(timeline.clone(), percentage)
+        .with_existential_deposit(ex_deposit)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, to_stake + ex_deposit - 1, 0)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+            token_id,
+            participant_id,
+            to_stake,
+        );
+
+        assert_eq!(
+            Token::account_info_by_token_and_account(token_id, participant_id).free_balance,
+            ex_deposit - 1,
+        );
+    })
+}
+
+#[test]
+fn participate_to_split_ok_with_user_account_free_balance_amount_decreased() {
+    let token_id = token!(1);
+    let timeline = timeline!(block!(1), block!(10));
+    let (treasury, allocation, percentage) = (treasury!(token_id), joys!(50), percent!(10));
+    let (participant_id, to_stake) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split(timeline.clone(), percentage)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, to_stake, 0)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+            token_id,
+            participant_id,
+            to_stake,
+        );
+
+        assert_eq!(
+            Token::account_info_by_token_and_account(token_id, participant_id).reserved_balance,
+            to_stake,
+        );
+    })
+}
+
+#[test]
+fn participate_to_split_ok_with_user_account_reserved_amount_increased() {
+    let token_id = token!(1);
+    let timeline = timeline!(block!(1), block!(10));
+    let (treasury, allocation, percentage) = (treasury!(token_id), joys!(50), percent!(10));
+    let (participant_id, to_stake) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split(timeline.clone(), percentage)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, to_stake, 0)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+            token_id,
+            participant_id,
+            to_stake,
+        );
+
+        assert_eq!(
+            Token::account_info_by_token_and_account(token_id, participant_id).free_balance,
+            balance!(0),
+        );
     })
 }

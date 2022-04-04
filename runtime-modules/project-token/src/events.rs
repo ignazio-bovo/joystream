@@ -81,5 +81,13 @@ decl_event! {
         /// - leftover funds
         RevenueSplitFinalized(TokenId, AccountId, ReserveBalance),
 
+        /// Revenue Split issued
+        /// Params:
+        /// - token identifier
+        /// - user account
+        /// - user allocated reserved balance
+        UserParticipatedToSplit(TokenId, AccountId, Balance),
+
+
     }
 }

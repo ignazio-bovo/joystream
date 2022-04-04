@@ -410,7 +410,11 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     }
 
     /// Participate to the token revenue split if ongoing
-    fn participate_to_split(_token_id: T::TokenId) -> DispatchResult {
+    fn participate_to_split(
+        token_id: T::TokenId,
+        who: T::AccountId,
+        amount: T::Balance,
+    ) -> DispatchResult {
         todo!()
     }
 

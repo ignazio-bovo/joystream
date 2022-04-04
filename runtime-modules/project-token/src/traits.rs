@@ -81,7 +81,11 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
     ) -> DispatchResult;
 
     /// Participate to the token revenue split if ongoing
-    fn participate_to_split(_token_id: Self::TokenId) -> DispatchResult;
+    fn participate_to_split(
+        token_id: Self::TokenId,
+        who: AccountId,
+        amount: Self::Balance,
+    ) -> DispatchResult;
 
     /// Finalize split by sending back eventual JOYs leftover
     fn finalize_revenue_split(token_id: Self::TokenId, account_id: AccountId) -> DispatchResult;
