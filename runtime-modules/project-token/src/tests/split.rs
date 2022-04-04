@@ -967,35 +967,6 @@ fn claim_split_revenue_fails_with_active_state_and_timeline_not_ended() {
 }
 
 #[test]
-fn claim_split_revenue_fails_with_insufficient_treasury_balance() {
-    let (token_id, issuance) = (token!(1), balance!(1_000));
-    let timeline = timeline!(block!(1), block!(10));
-    let (_allocation, percentage) = (joys!(50), percent!(10));
-    let (participant_id, staked) = (account!(2), balance!(100));
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_issuance(issuance)
-        .with_revenue_split(timeline.clone(), percentage)
-        .build();
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_data)
-        .with_account(participant_id, 0, staked)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_block_number_by(timeline.end());
-
-        let result =
-            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::claim_revenue_split_amount(
-                token_id,
-                participant_id,
-            );
-
-        assert_noop!(result, Error::<Test>::InsufficientTreasuryBalanceForClaim);
-    })
-}
-
-#[test]
 fn claim_split_revenue_ok() {
     let (token_id, issuance) = (token!(1), balance!(1_000));
     let timeline = timeline!(block!(1), block!(10));
@@ -1027,18 +998,18 @@ fn claim_split_revenue_ok() {
 
 #[test]
 fn claim_split_revenue_ok_with_event_deposit() {
-    let (token_id, issuance) = (token!(1), balance!(1_000));
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
     let timeline = timeline!(block!(1), block!(10));
     let (treasury, allocation, percentage) = (treasury!(token_id), joys!(1000), percent!(10));
     let (participant_id, staked, revenue) = (account!(2), balance!(100), joys!(10));
 
     let token_data = TokenDataBuilder::new_empty()
-        .with_issuance(issuance)
+        .with_issuance(pre_issuance)
         .with_revenue_split(timeline.clone(), percentage)
         .build();
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
-        .with_account(participant_id, 0, staked)
+        .with_account(participant_id, 0, staked) // total issuance = pre_issuance + staked
         .build();
 
     build_test_externalities(config).execute_with(|| {
@@ -1055,25 +1026,25 @@ fn claim_split_revenue_ok_with_event_deposit() {
             token_id,
             participant_id,
             revenue,
-            timeline.end()
+            timeline.end() + 1 // end + starting block
         ));
     })
 }
 
 #[test]
 fn claim_split_revenue_ok_with_treasury_funds_decreased() {
-    let (token_id, issuance) = (token!(1), balance!(1_000));
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
     let timeline = timeline!(block!(1), block!(10));
     let (treasury, allocation, percentage) = (treasury!(token_id), joys!(1000), percent!(10));
     let (participant_id, staked, revenue) = (account!(2), balance!(100), joys!(10));
 
     let token_data = TokenDataBuilder::new_empty()
-        .with_issuance(issuance)
+        .with_issuance(pre_issuance)
         .with_revenue_split(timeline.clone(), percentage)
         .build();
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
-        .with_account(participant_id, 0, staked)
+        .with_account(participant_id, 0, staked) // total issuance = pre_issuance + staked
         .build();
 
     build_test_externalities(config).execute_with(|| {
@@ -1091,18 +1062,18 @@ fn claim_split_revenue_ok_with_treasury_funds_decreased() {
 
 #[test]
 fn claim_split_revenue_ok_with_user_funds_increased() {
-    let (token_id, issuance) = (token!(1), balance!(1_000));
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
     let timeline = timeline!(block!(1), block!(10));
     let (treasury, allocation, percentage) = (treasury!(token_id), joys!(1000), percent!(10));
     let (participant_id, staked, revenue) = (account!(2), balance!(100), joys!(10));
 
     let token_data = TokenDataBuilder::new_empty()
-        .with_issuance(issuance)
+        .with_issuance(pre_issuance)
         .with_revenue_split(timeline.clone(), percentage)
         .build();
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, token_data)
-        .with_account(participant_id, 0, staked)
+        .with_account(participant_id, 0, staked) // total_issuance = pre_issuance + staked
         .build();
 
     build_test_externalities(config).execute_with(|| {

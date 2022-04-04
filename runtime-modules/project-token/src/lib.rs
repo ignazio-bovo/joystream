@@ -25,6 +25,10 @@ use types::{
     TransferPolicyOf,
 };
 
+// aliases
+pub type ReserveBalanceOf<T> =
+    <<T as Trait>::ReserveCurrency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
 /// Pallet Configuration Trait
 pub trait Trait: frame_system::Trait {
     /// Events
@@ -417,7 +421,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     ) -> DispatchResult {
         let token_info = Self::ensure_token_exists(token_id)?;
 
-        let timeline = token_info.revenue_split.ensure_active::<T>()?;
+        let (timeline, _) = token_info.revenue_split.ensure_active::<T>()?;
         let now = <frame_system::Module<T>>::block_number();
         ensure!(timeline.is_ongoing(now), Error::<T>::RevenueSplitHasEnded);
 
@@ -443,21 +447,52 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     fn claim_revenue_split_amount(token_id: T::TokenId, who: T::AccountId) -> DispatchResult {
         let token_info = Self::ensure_token_exists(token_id)?;
 
-        let timeline = token_info.revenue_split.ensure_active::<T>()?;
+        let (timeline, percentage) = token_info.revenue_split.ensure_active::<T>()?;
         let now = <frame_system::Module<T>>::block_number();
-        ensure!(!timeline.is_ongoing(now), Error::<T>::RevenueSplitHasEnded);
+        ensure!(!timeline.is_ongoing(now), Error::<T>::RevenueSplitDidNotEnd);
 
         let account_info = Self::ensure_account_data_exists(token_id, &who)?;
 
         // == MUTATION SAFE ==
-        todo!()
+
+        let treasury_account: T::AccountId = T::ModuleId::get().into_sub_account(token_id);
+        let allocation = T::ReserveCurrency::free_balance(&treasury_account);
+        let revenue_amount = Self::compute_revenue_split_amount(
+            account_info.reserved_balance,
+            token_info.current_total_issuance,
+            allocation,
+            percentage,
+        );
+
+        let _ = T::ReserveCurrency::transfer(
+            &treasury_account,
+            &who,
+            revenue_amount,
+            ExistenceRequirement::KeepAlive,
+        );
+
+        AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_info| {
+            account_info.free_balance = account_info
+                .free_balance
+                .saturating_add(account_info.reserved_balance);
+            account_info.reserved_balance = T::Balance::zero();
+        });
+
+        Self::deposit_event(RawEvent::UserClaimedRevenueSplit(
+            token_id,
+            who,
+            revenue_amount,
+            now,
+        ));
+
+        Ok(())
     }
 
     /// Participate to the token revenue split if ongoing
     fn finalize_revenue_split(token_id: T::TokenId, account_id: T::AccountId) -> DispatchResult {
         let token_info = Self::ensure_token_exists(token_id)?;
 
-        let timeline = token_info.revenue_split.ensure_active::<T>()?;
+        let (timeline, _) = token_info.revenue_split.ensure_active::<T>()?;
         let now = <frame_system::Module<T>>::block_number();
         ensure!(!timeline.is_ongoing(now), Error::<T>::RevenueSplitDidNotEnd);
 
@@ -790,5 +825,17 @@ impl<T: Trait> Module<T> {
                 .outstanding_credit
                 .saturating_add(credit_increase);
         });
+    }
+
+    pub(crate) fn compute_revenue_split_amount(
+        stake: T::Balance,
+        issuance: T::Balance,
+        allocation: ReserveBalanceOf<T>,
+        percentage: Percent,
+    ) -> ReserveBalanceOf<T> {
+        // TODO AFTER SUBSTRATE UPDATE: use Percent::from_rational(..)
+        let perc_of_issuance_staked = Percent::from_rational_approximation(stake, issuance);
+        let net_allocation = percentage.mul_floor(allocation);
+        perc_of_issuance_staked.mul_floor(net_allocation)
     }
 }
