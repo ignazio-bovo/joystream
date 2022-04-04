@@ -415,6 +415,9 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         who: T::AccountId,
         amount: T::Balance,
     ) -> DispatchResult {
+        // let token_info = Self::ensure_token_exists(token_id)?;
+        // let account_info = Self::ensure_account_data_exists(token_id, &who)?;
+
         todo!()
     }
 

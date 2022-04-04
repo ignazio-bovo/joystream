@@ -57,5 +57,8 @@ decl_error! {
         /// Revenue Split has not ended yet
         RevenueSplitDidNotEnd,
 
+        /// Revenue Split has ended
+        RevenueSplitHasEnded,
+
     }
 }
