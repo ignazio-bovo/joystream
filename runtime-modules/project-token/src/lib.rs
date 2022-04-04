@@ -437,6 +437,12 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         Ok(())
     }
 
+    /// Members can claim their split revenue
+    fn claim_revenue_split_amount(token_id: T::TokenId, who: T::AccountId) -> DispatchResult {
+        // == MUTATION SAFE ==
+        todo!()
+    }
+
     /// Participate to the token revenue split if ongoing
     fn finalize_revenue_split(token_id: T::TokenId, account_id: T::AccountId) -> DispatchResult {
         let token_info = Self::ensure_token_exists(token_id)?;

@@ -63,5 +63,9 @@ decl_error! {
         /// Revenue Split has ended
         RevenueSplitHasEnded,
 
+        /// Insufficient Treasury Balance revenue split claim
+        InsufficientTreasuryBalanceForClaim,
+
+
     }
 }
