@@ -285,7 +285,7 @@ impl<AccountId: Clone, Hash> TransferLocationTrait<AccountId, TransferPolicy<Has
 }
 
 impl<AccountId> SimpleLocation<AccountId> {
-    pub(crate) fn _new(account: AccountId) -> Self {
+    pub(crate) fn new(account: AccountId) -> Self {
         Self { account }
     }
 }
@@ -325,7 +325,7 @@ impl<AccountId: Encode, Hasher: Hash> VerifiableLocation<AccountId, Hasher> {
         proof_result == commit
     }
 
-    pub fn _new(merkle_proof: Vec<(Hasher::Output, MerkleSide)>, account: AccountId) -> Self {
+    pub fn new(merkle_proof: Vec<(Hasher::Output, MerkleSide)>, account: AccountId) -> Self {
         Self {
             merkle_proof,
             account,
