@@ -662,6 +662,36 @@ fn participate_to_split_fails_with_active_state_but_ended_timeline() {
 }
 
 #[test]
+fn participate_to_split_fails_with_previous_reserved_amount_outstanding() {
+    let token_id = token!(1);
+    let timeline = timeline!(block!(1), block!(10));
+    let (treasury, allocation, percentage) = (treasury!(token_id), joys!(50), percent!(10));
+    let (participant_id, to_stake, staked) = (account!(2), balance!(100), balance!(10));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_revenue_split(timeline.clone(), percentage)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, to_stake, staked)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+        increase_block_number_by(timeline.end());
+
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::participate_to_split(
+                token_id,
+                participant_id,
+                to_stake,
+            );
+
+        assert_noop!(result, Error::<Test>::PreviousReservedAmountOutstanding);
+    })
+}
+
+#[test]
 fn participate_to_split_ok() {
     let token_id = token!(1);
     let timeline = timeline!(block!(1), block!(10));

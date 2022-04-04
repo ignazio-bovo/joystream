@@ -6,6 +6,9 @@ decl_error! {
         /// Free balance is insufficient for freezing specified amount
         InsufficientFreeBalanceForReserving,
 
+        /// Previous reserved amount still outstanding
+        PreviousReservedAmountOutstanding,
+
         /// Reserved balance is insufficient for unfreezing specified amount
         InsufficientReservedBalance,
 

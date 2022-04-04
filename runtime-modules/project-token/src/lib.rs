@@ -415,10 +415,19 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         who: T::AccountId,
         amount: T::Balance,
     ) -> DispatchResult {
-        // let token_info = Self::ensure_token_exists(token_id)?;
-        // let account_info = Self::ensure_account_data_exists(token_id, &who)?;
+        let token_info = Self::ensure_token_exists(token_id)?;
 
-        todo!()
+        let timeline = token_info.revenue_split.ensure_active::<T>()?;
+        let now = <frame_system::Module<T>>::block_number();
+        ensure!(timeline.is_ongoing(now), Error::<T>::RevenueSplitHasEnded);
+
+        let account_info = Self::ensure_account_data_exists(token_id, &who)?;
+
+        account_info.ensure_can_reserve::<T>(amount)?;
+
+        // == MUTATION SAFE ==
+
+        Ok(())
     }
 
     /// Participate to the token revenue split if ongoing

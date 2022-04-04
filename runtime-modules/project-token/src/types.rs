@@ -228,6 +228,20 @@ impl<Balance: Zero + Copy + PartialOrd + Saturating> AccountData<Balance> {
     pub(crate) fn _total_balance(&self) -> Balance {
         self.free_balance.saturating_add(self.reserved_balance)
     }
+
+    pub(crate) fn ensure_can_reserve<T: crate::Trait>(&self, amount: Balance) -> DispatchResult {
+        ensure!(
+            self.free_balance >= amount,
+            crate::Error::<T>::InsufficientFreeBalanceForReserving,
+        );
+
+        ensure!(
+            self.reserved_balance.is_zero(),
+            crate::Error::<T>::PreviousReservedAmountOutstanding,
+        );
+
+        Ok(())
+    }
 }
 /// Token Data implementation
 impl<Balance, Hash, BlockNumber> TokenData<Balance, Hash, BlockNumber> {
