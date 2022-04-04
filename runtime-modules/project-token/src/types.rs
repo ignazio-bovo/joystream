@@ -4,7 +4,10 @@ use frame_support::{
     ensure,
 };
 use sp_arithmetic::traits::{Saturating, Zero};
-use sp_runtime::{traits::Hash, Percent};
+use sp_runtime::{
+    traits::{Convert, Hash},
+    Percent,
+};
 
 // crate imports
 use crate::traits::TransferLocationTrait;
@@ -178,6 +181,25 @@ impl Default for MerkleSide {
     fn default() -> Self {
         MerkleSide::Right
     }
+}
+
+/// Linear + Cliff vesting Schedule
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
+pub struct LinearVestingSchedule<BlockNumber, Balance> {
+    /// Vesting Rate: Amount of token at each block
+    vesting_rate: Balance,
+
+    /// # of Blocks to wait until vesting mechanism starts after starting_block
+    cliff: BlockNumber,
+
+    /// Starting block for the vesting schedule
+    starting_block: BlockNumber,
+
+    /// Duration
+    duration: BlockNumber,
+
+    /// Base liquidity endowment accounted at starting_block
+    base_liquidity: Balance,
 }
 
 // implementation
@@ -408,6 +430,46 @@ impl<BlockNumber: Copy + Saturating + PartialOrd> SplitTimeline<BlockNumber> {
 
     pub(crate) fn end(&self) -> BlockNumber {
         self.start.saturating_add(self.duration)
+    }
+}
+
+impl<BlockNumber: PartialOrd + Copy + Saturating, Balance: Saturating + Copy + Zero>
+    LinearVestingSchedule<BlockNumber, Balance>
+{
+    pub fn new(
+        cliff: BlockNumber,
+        base_liquidity: Balance,
+        starting_block: BlockNumber,
+        duration: BlockNumber,
+        vesting_rate: Balance,
+    ) -> Self {
+        Self {
+            vesting_rate,
+            cliff,
+            starting_block,
+            duration,
+            base_liquidity,
+        }
+    }
+
+    pub fn vested_amount<BlockNumberToBalance>(&self, block: BlockNumber) -> Balance
+    where
+        BlockNumberToBalance: Convert<BlockNumber, Balance>,
+    {
+        let effective_start = self.starting_block.saturating_add(self.cliff);
+        let end_block = effective_start.saturating_add(self.duration);
+
+        let block_count = if block >= end_block {
+            BlockNumberToBalance::convert(self.duration)
+        } else if block < end_block && block >= effective_start {
+            BlockNumberToBalance::convert(block.saturating_sub(effective_start))
+        } else {
+            Balance::zero()
+        };
+
+        block_count
+            .saturating_mul(self.vesting_rate)
+            .saturating_add(self.base_liquidity)
     }
 }
 
