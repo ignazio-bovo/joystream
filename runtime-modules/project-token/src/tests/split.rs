@@ -1091,13 +1091,13 @@ fn claim_split_revenue_ok_with_user_funds_increased() {
 
 #[test]
 fn claim_split_revenue_ok_with_user_reserved_amount_reset() {
-    let (token_id, issuance) = (token!(1), balance!(1_000));
+    let (token_id, pre_issuance) = (token!(1), balance!(1_000));
     let timeline = timeline!(block!(1), block!(10));
     let (treasury, allocation, percentage) = (treasury!(token_id), joys!(1000), percent!(10));
-    let (participant_id, staked, revenue) = (account!(2), balance!(100), joys!(10));
+    let (participant_id, staked, _revenue) = (account!(2), balance!(100), joys!(10));
 
     let token_data = TokenDataBuilder::new_empty()
-        .with_issuance(issuance)
+        .with_issuance(pre_issuance)
         .with_revenue_split(timeline.clone(), percentage)
         .build();
     let config = GenesisConfigBuilder::new_empty()
@@ -1122,11 +1122,40 @@ fn claim_split_revenue_ok_with_user_reserved_amount_reset() {
 }
 
 #[test]
-fn claim_split_revenue_ok_with_user_free_balance_increased() {
-    let (token_id, issuance) = (token!(1), balance!(1_000));
+fn claim_split_revenue_ok_noop_with_user_having_no_stacked_funds() {
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
     let timeline = timeline!(block!(1), block!(10));
     let (treasury, allocation, percentage) = (treasury!(token_id), joys!(1000), percent!(10));
-    let (participant_id, staked, revenue) = (account!(2), balance!(100), joys!(10));
+    let (participant_id, _staked, _revenue) = (account!(2), balance!(100), joys!(10));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_issuance(pre_issuance)
+        .with_revenue_split(timeline.clone(), percentage)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, 0, 0)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        increase_account_balance(treasury, allocation);
+        increase_block_number_by(timeline.end());
+
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::claim_revenue_split_amount(
+                token_id,
+                participant_id,
+            );
+        assert_ok!(result);
+    })
+}
+
+#[test]
+fn claim_split_revenue_ok_with_user_free_balance_increased() {
+    let (token_id, issuance) = (token!(1), balance!(900));
+    let timeline = timeline!(block!(1), block!(10));
+    let (treasury, allocation, percentage) = (treasury!(token_id), joys!(1000), percent!(10));
+    let (participant_id, staked, _revenue) = (account!(2), balance!(100), joys!(10));
 
     let token_data = TokenDataBuilder::new_empty()
         .with_issuance(issuance)
@@ -1149,6 +1178,176 @@ fn claim_split_revenue_ok_with_user_free_balance_increased() {
         assert_eq!(
             Token::account_info_by_token_and_account(token_id, participant_id).free_balance,
             staked,
+        );
+    })
+}
+
+#[test]
+fn unreserved_fails_with_invalid_token_id() {
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
+    let timeline = timeline!(block!(1), block!(10));
+    let (participant_id, staked) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_issuance(pre_issuance)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, 0, staked)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
+            token_id + 1,
+            participant_id,
+            staked,
+        );
+
+        assert_noop!(result, Error::<Test>::TokenDoesNotExist);
+    })
+}
+
+#[test]
+fn unreserved_fails_with_insufficient_reserved_balance() {
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
+    let (participant_id, staked) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_issuance(pre_issuance)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, 0, staked - 1)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
+            token_id,
+            participant_id,
+            staked,
+        );
+
+        assert_noop!(result, Error::<Test>::InsufficientReservedBalance);
+    })
+}
+
+#[test]
+fn unreserved_fails_with_invalid_account_id() {
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
+    let (participant_id, staked) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_issuance(pre_issuance)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
+            token_id,
+            participant_id,
+            staked,
+        );
+
+        assert_noop!(result, Error::<Test>::AccountInformationDoesNotExist);
+    })
+}
+
+#[test]
+fn unreserved_ok() {
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
+    let (participant_id, staked) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_issuance(pre_issuance)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(participant_id, 0, staked)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
+            token_id,
+            participant_id,
+            staked,
+        );
+
+        assert_ok!(result);
+    })
+}
+
+#[test]
+fn unreserved_ok_with_event_deposit() {
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
+    let (account_id, staked) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_issuance(pre_issuance)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(account_id, 0, staked)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
+            token_id, account_id, staked,
+        );
+
+        last_event_eq!(RawEvent::TokenAmountUnreservedFrom(
+            token_id, account_id, staked
+        ));
+    })
+}
+
+#[test]
+fn unreserved_ok_with_reserved_amount_zero() {
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
+    let (account_id, staked) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_issuance(pre_issuance)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(account_id, 0, staked)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
+            token_id, account_id, staked,
+        );
+
+        assert_eq!(
+            Token::account_info_by_token_and_account(token_id, account_id).reserved_balance,
+            balance!(0)
+        );
+    })
+}
+
+#[test]
+fn unreserved_ok_with_free_balance_increased() {
+    let (token_id, pre_issuance) = (token!(1), balance!(900));
+    let (account_id, staked) = (account!(2), balance!(100));
+
+    let token_data = TokenDataBuilder::new_empty()
+        .with_issuance(pre_issuance)
+        .build();
+    let config = GenesisConfigBuilder::new_empty()
+        .with_token(token_id, token_data)
+        .with_account(account_id, 0, staked)
+        .build();
+
+    build_test_externalities(config).execute_with(|| {
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
+            token_id, account_id, staked,
+        );
+
+        assert_eq!(
+            Token::account_info_by_token_and_account(token_id, account_id).free_balance,
+            staked
         );
     })
 }

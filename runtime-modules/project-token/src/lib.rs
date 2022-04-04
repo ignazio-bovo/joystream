@@ -453,6 +453,11 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 
         let account_info = Self::ensure_account_data_exists(token_id, &who)?;
 
+        // no-op if reserve balance is zero
+        if account_info.reserved_balance.is_zero() {
+            return Ok(());
+        }
+
         // == MUTATION SAFE ==
 
         let treasury_account: T::AccountId = T::ModuleId::get().into_sub_account(token_id);
@@ -512,6 +517,41 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         Self::deposit_event(RawEvent::RevenueSplitFinalized(
             token_id, account_id, leftovers,
         ));
+        Ok(())
+    }
+
+    /// Unreserve `amount` of token for `who`
+    /// Preconditions:
+    /// - `token_id` must id
+    /// - `who` must identify valid account for `token_id`
+    /// - `who` reserved balance must be greater than `amount`
+    ///
+    /// Postconditions:
+    /// - `who` free balance increased by `amount`
+    /// - `who` reserved balance decreased by `amount`
+    /// if `amount` is zero it is equivalent to a no-op
+    fn unreserve(token_id: T::TokenId, who: T::AccountId, amount: T::Balance) -> DispatchResult {
+        if amount.is_zero() {
+            return Ok(());
+        }
+
+        // ensure token validity
+        Self::ensure_token_exists(token_id).map(|_| ())?;
+
+        // ensure src account id validity
+        let account_info = Self::ensure_account_data_exists(token_id, &who)?;
+
+        account_info.ensure_can_unreserve::<T>(amount)?;
+
+        // == MUTATION SAFE ==
+
+        AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_data| {
+            account_data.free_balance = account_data.free_balance.saturating_add(amount);
+            account_data.reserved_balance = account_data.reserved_balance.saturating_sub(amount);
+        });
+
+        Self::deposit_event(RawEvent::TokenAmountUnreservedFrom(token_id, who, amount));
+
         Ok(())
     }
 }
@@ -657,45 +697,6 @@ impl<T: Trait> Module<T> {
         });
 
         Self::deposit_event(RawEvent::TokenAmountReservedFrom(token_id, who, amount));
-        Ok(())
-    }
-
-    /// Unreserve `amount` of token for `who`
-    /// Preconditions:
-    /// - `token_id` must id
-    /// - `who` must identify valid account for `token_id`
-    /// - `who` reserved balance must be greater than `amount`
-    ///
-    /// Postconditions:
-    /// - `who` free balance increased by `amount`
-    /// - `who` reserved balance decreased by `amount`
-    /// if `amount` is zero it is equivalent to a no-op
-    fn _unreserve(token_id: T::TokenId, who: T::AccountId, amount: T::Balance) -> DispatchResult {
-        if amount.is_zero() {
-            return Ok(());
-        }
-
-        // ensure token validity
-        Self::ensure_token_exists(token_id).map(|_| ())?;
-
-        // ensure src account id validity
-        let account_info = Self::ensure_account_data_exists(token_id, &who)?;
-
-        // ensure can freeze amount
-        ensure!(
-            account_info.reserved_balance >= amount,
-            Error::<T>::InsufficientReservedBalance
-        );
-
-        // == MUTATION SAFE ==
-
-        AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_data| {
-            account_data.free_balance = account_data.free_balance.saturating_add(amount);
-            account_data.reserved_balance = account_data.reserved_balance.saturating_sub(amount);
-        });
-
-        Self::deposit_event(RawEvent::TokenAmountUnreservedFrom(token_id, who, amount));
-
         Ok(())
     }
 

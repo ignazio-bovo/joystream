@@ -242,6 +242,15 @@ impl<Balance: Zero + Copy + PartialOrd + Saturating> AccountData<Balance> {
 
         Ok(())
     }
+
+    pub(crate) fn ensure_can_unreserve<T: crate::Trait>(&self, amount: Balance) -> DispatchResult {
+        ensure!(
+            self.reserved_balance >= amount,
+            crate::Error::<T>::InsufficientReservedBalance,
+        );
+
+        Ok(())
+    }
 }
 /// Token Data implementation
 impl<Balance, Hash, BlockNumber> TokenData<Balance, Hash, BlockNumber> {
