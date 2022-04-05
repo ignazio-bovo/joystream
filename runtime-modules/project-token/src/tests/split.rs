@@ -779,7 +779,7 @@ fn participate_to_split_ok_with_user_account_not_delete_due_to_existential_depos
         );
 
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, participant_id).free_balance,
+            Token::account_info_by_token_and_account(token_id, participant_id).liquidity,
             ex_deposit - 1,
         );
     })
@@ -841,7 +841,7 @@ fn participate_to_split_ok_with_user_account_reserved_amount_increased() {
         );
 
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, participant_id).free_balance,
+            Token::account_info_by_token_and_account(token_id, participant_id).liquidity,
             balance!(0),
         );
     })
@@ -1176,7 +1176,7 @@ fn claim_split_revenue_ok_with_user_free_balance_increased() {
                 participant_id,
             );
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, participant_id).free_balance,
+            Token::account_info_by_token_and_account(token_id, participant_id).liquidity,
             staked,
         );
     })
@@ -1321,7 +1321,7 @@ fn unreserved_ok_with_reserved_amount_zero() {
         );
 
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, account_id).reserved_balance,
+            Token::account_info_by_token_and_account(token_id, account_id).stacked_balance(),
             balance!(0)
         );
     })
@@ -1346,7 +1346,7 @@ fn unreserved_ok_with_free_balance_increased() {
         );
 
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, account_id).free_balance,
+            Token::account_info_by_token_and_account(token_id, account_id).liquidity,
             staked
         );
     })

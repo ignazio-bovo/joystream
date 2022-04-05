@@ -7,7 +7,11 @@ use frame_support::{
     traits::{Currency, ExistenceRequirement, Get},
 };
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, One, Saturating, Zero};
-use sp_runtime::{traits::AccountIdConversion, ModuleId, Percent};
+use sp_runtime::{
+    traits::{AccountIdConversion, Convert},
+    ModuleId, Percent,
+};
+use sp_std::iter::Sum;
 
 // crate modules
 mod errors;
@@ -22,7 +26,7 @@ pub use events::{Event, RawEvent};
 use traits::{PalletToken, TransferLocationTrait};
 use types::{
     AccountDataOf, DecOp, TimelineParamsOf, TokenDataOf, TokenIssuanceParametersOf,
-    TransferPolicyOf,
+    TransferPolicyOf, VestingScheduleOf,
 };
 
 // aliases
@@ -36,7 +40,7 @@ pub trait Trait: frame_system::Trait {
 
     // TODO: Add frame_support::pallet_prelude::TypeInfo trait
     /// the Balance type used
-    type Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + Saturating;
+    type Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + Saturating + Sum;
 
     /// The token identifier used
     type TokenId: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug;
@@ -49,6 +53,9 @@ pub trait Trait: frame_system::Trait {
 
     /// Module Id type used for account generation
     type ModuleId: Get<ModuleId>;
+
+    /// Converter from BlockNumber to Balance
+    type BlockNumberToBalance: Convert<Self::BlockNumber, Self::Balance>;
 }
 
 decl_storage! {
@@ -250,7 +257,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         });
 
         AccountInfoByTokenAndAccount::<T>::mutate(token_id, &to_account, |account_info| {
-            account_info.free_balance = account_info.free_balance.saturating_add(credit)
+            account_info.liquidity = account_info.liquidity.saturating_add(credit)
         });
 
         Self::deposit_event(RawEvent::PatronageCreditClaimed(
@@ -333,16 +340,13 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 
         if AccountInfoByTokenAndAccount::<T>::contains_key(token_id, &who) {
             AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_data| {
-                account_data.free_balance = account_data.free_balance.saturating_add(amount)
+                account_data.liquidity = account_data.liquidity.saturating_add(amount)
             });
         } else {
             AccountInfoByTokenAndAccount::<T>::insert(
                 token_id,
                 &who,
-                AccountDataOf::<T> {
-                    free_balance: amount,
-                    reserved_balance: T::Balance::zero(),
-                },
+                AccountDataOf::<T>::new(amount, VestingScheduleOf::<T>::default()),
             );
         }
 
@@ -427,13 +431,12 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 
         let account_info = Self::ensure_account_data_exists(token_id, &who)?;
 
-        account_info.ensure_can_reserve::<T>(amount)?;
+        account_info.ensure_can_stake::<T>(amount)?;
 
         // == MUTATION SAFE ==
 
         AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_info| {
-            account_info.free_balance = account_info.free_balance.saturating_sub(amount);
-            account_info.reserved_balance = account_info.reserved_balance.saturating_add(amount);
+            account_info.stake(amount);
         });
 
         Self::deposit_event(RawEvent::UserParticipatedToSplit(
@@ -454,7 +457,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         let account_info = Self::ensure_account_data_exists(token_id, &who)?;
 
         // no-op if reserve balance is zero
-        if account_info.reserved_balance.is_zero() {
+        if account_info.staked_balance.is_zero() {
             return Ok(());
         }
 
@@ -463,7 +466,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         let treasury_account: T::AccountId = T::ModuleId::get().into_sub_account(token_id);
         let allocation = T::ReserveCurrency::free_balance(&treasury_account);
         let revenue_amount = Self::compute_revenue_split_amount(
-            account_info.reserved_balance,
+            account_info.staked_balance,
             token_info.current_total_issuance,
             allocation,
             percentage,
@@ -477,10 +480,7 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
         );
 
         AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_info| {
-            account_info.free_balance = account_info
-                .free_balance
-                .saturating_add(account_info.reserved_balance);
-            account_info.reserved_balance = T::Balance::zero();
+            account_info.unstake()
         });
 
         Self::deposit_event(RawEvent::UserClaimedRevenueSplit(
@@ -524,33 +524,25 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
     /// Preconditions:
     /// - `token_id` must id
     /// - `who` must identify valid account for `token_id`
-    /// - `who` reserved balance must be greater than `amount`
     ///
     /// Postconditions:
-    /// - `who` free balance increased by `amount`
-    /// - `who` reserved balance decreased by `amount`
-    /// if `amount` is zero it is equivalent to a no-op
-    fn unreserve(token_id: T::TokenId, who: T::AccountId, amount: T::Balance) -> DispatchResult {
-        if amount.is_zero() {
-            return Ok(());
-        }
-
+    /// - liqudity of `who` increased by staked amount
+    /// - staked amonut of `who` set to 0
+    fn abandon_revenue_split(token_id: T::TokenId, who: T::AccountId) -> DispatchResult {
         // ensure token validity
         Self::ensure_token_exists(token_id).map(|_| ())?;
 
         // ensure src account id validity
         let account_info = Self::ensure_account_data_exists(token_id, &who)?;
-
-        account_info.ensure_can_unreserve::<T>(amount)?;
+        let amount = account_info.staked_balance;
 
         // == MUTATION SAFE ==
 
-        AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_data| {
-            account_data.free_balance = account_data.free_balance.saturating_add(amount);
-            account_data.reserved_balance = account_data.reserved_balance.saturating_sub(amount);
+        AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_info| {
+            account_info.unstake();
         });
 
-        Self::deposit_event(RawEvent::TokenAmountUnreservedFrom(token_id, who, amount));
+        Self::deposit_event(RawEvent::RevenueSplitAbandoned(token_id, who, amount));
 
         Ok(())
     }
@@ -558,150 +550,6 @@ impl<T: Trait> PalletToken<T::AccountId, TransferPolicyOf<T>, TokenIssuanceParam
 
 /// Module implementation
 impl<T: Trait> Module<T> {
-    /// Mint `amount` into valid account `who`
-    /// for specified token `token_id`
-    ///
-    /// Preconditions:
-    /// - `token_id` must exists
-    /// - `who` must exists
-    ///
-    /// Postconditions:
-    /// - free balance of `who` is increased by `amount`
-    /// - patronage credit accounted for `token_id`
-    /// - `token_id` issuance increased by amount + credit
-    /// if `amount` is zero it is equivalent to a no-op
-    fn _deposit_into_existing(
-        token_id: T::TokenId,
-        who: T::AccountId,
-        amount: T::Balance,
-    ) -> DispatchResult {
-        if amount.is_zero() {
-            return Ok(());
-        }
-
-        // ensure token validity
-        Self::ensure_token_exists(token_id).map(|_| ())?;
-
-        // ensure account id validity
-        Self::ensure_account_data_exists(token_id, &who).map(|_| ())?;
-
-        // == MUTATION SAFE ==
-
-        // increase token issuance
-        Self::do_mint(token_id, amount);
-
-        AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_data| {
-            account_data.free_balance = account_data.free_balance.saturating_add(amount)
-        });
-
-        Self::deposit_event(RawEvent::TokenAmountDepositedInto(token_id, who, amount));
-
-        Ok(())
-    }
-
-    /// Burn `amount` of token `token_id` by slashing it from `who`
-    ///
-    /// Preconditions:
-    /// - `token_id` must exists
-    /// - `who` must exists
-    ///
-    /// Postconditions:
-    /// - free balance of `who` is decreased by `amount` or set to zero if below existential
-    ///   deposit
-    /// if `amount` is zero it is equivalent to a no-op
-    fn _slash(token_id: T::TokenId, who: T::AccountId, amount: T::Balance) -> DispatchResult {
-        if amount.is_zero() {
-            return Ok(());
-        }
-
-        // ensure token validity
-        let token_info = Self::ensure_token_exists(token_id)?;
-
-        // ensure account id validity
-        let account_info = Self::ensure_account_data_exists(token_id, &who)?;
-
-        // Amount to decrease by accounting for existential deposit
-        let decrease_operation =
-            account_info.decrease_with_ex_deposit::<T>(amount, token_info.existential_deposit)?;
-        // ensure issuance can be decreased by amount
-        ensure!(
-            token_info.current_total_issuance >= decrease_operation.amount(),
-            Error::<T>::InsufficientIssuanceToDecreaseByAmount,
-        );
-
-        // == MUTATION SAFE ==
-
-        // decrease token issuance
-        TokenInfoById::<T>::mutate(token_id, |token_data| {
-            token_data.current_total_issuance = token_data
-                .current_total_issuance
-                .saturating_sub(decrease_operation.total_amount())
-        });
-
-        // then perform proper operation for the slash
-        match decrease_operation {
-            DecOp::<T>::Reduce(amount) => {
-                AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_data| {
-                    account_data.free_balance = account_data.free_balance.saturating_sub(amount);
-                });
-            }
-            DecOp::<T>::Remove(..) => {
-                AccountInfoByTokenAndAccount::<T>::remove(token_id, &who);
-                // if no more account for token -> deissue
-                if AccountInfoByTokenAndAccount::<T>::iter_prefix(token_id)
-                    .next()
-                    .is_none()
-                {
-                    Self::do_deissue_token(token_id)
-                }
-            }
-        }
-
-        Self::deposit_event(RawEvent::TokenAmountSlashedFrom(token_id, who, amount));
-
-        Ok(())
-    }
-
-    /// Reserve `amount` of token for `who`
-    /// Preconditions:
-    /// - `token_id` must id
-    /// - `who` must identify valid account for `token_id`
-    /// - `who` free balance must be greater than `amount`
-    ///
-    /// Postconditions:
-    /// - `who` free balance decreased by `amount`
-    /// - `who` reserved balance increased by `amount`
-    /// if `amount` is zero it is equivalent to a no-op
-    fn _reserve(token_id: T::TokenId, who: T::AccountId, amount: T::Balance) -> DispatchResult {
-        if amount.is_zero() {
-            return Ok(());
-        }
-
-        // ensure token validity
-        let _ = Self::ensure_token_exists(token_id)?;
-
-        // ensure src account id validity
-        let account_info = Self::ensure_account_data_exists(token_id, &who)?;
-
-        // ensure can freeze amount
-        ensure!(
-            account_info.free_balance >= amount,
-            Error::<T>::InsufficientFreeBalanceForReserving,
-        );
-
-        // == MUTATION SAFE ==
-
-        AccountInfoByTokenAndAccount::<T>::mutate(token_id, &who, |account_data| {
-            account_data.free_balance = account_data.free_balance.saturating_sub(amount);
-            account_data.reserved_balance = account_data.reserved_balance.saturating_add(amount);
-        });
-
-        Self::deposit_event(RawEvent::TokenAmountReservedFrom(token_id, who, amount));
-        Ok(())
-    }
-
-    // Utility ensure checks
-
     pub(crate) fn ensure_account_data_exists(
         token_id: T::TokenId,
         account_id: &T::AccountId,
@@ -762,14 +610,18 @@ impl<T: Trait> Module<T> {
             })
         })?;
 
-        let total_amount = outputs.iter().fold(T::Balance::zero(), |acc, (_, amount)| {
-            acc.saturating_add(*amount)
-        });
+        let total_amount = outputs
+            .iter()
+            .map(|(_, amount)| *amount)
+            .sum::<T::Balance>();
 
         // Amount to decrease by accounting for existential deposit
-        let decrease_op = src_account_info
-            .decrease_with_ex_deposit::<T>(total_amount, token_info.existential_deposit)
-            .map_err(|_| Error::<T>::InsufficientFreeBalanceForTransfer)?;
+        let decrease_op = Self::decrease_with_ex_deposit(
+            &src_account_info,
+            token_info.existential_deposit,
+            total_amount,
+        )?;
+
         Ok((decrease_op, token_info))
     }
 
@@ -788,14 +640,14 @@ impl<T: Trait> Module<T> {
                 token_id,
                 dst.location_account(),
                 |account_data| {
-                    account_data.free_balance = account_data.free_balance.saturating_add(*amount)
+                    account_data.liquidity = account_data.liquidity.saturating_add(*amount)
                 },
             );
         });
         match decrease_op {
             DecOp::<T>::Reduce(amount) => {
                 AccountInfoByTokenAndAccount::<T>::mutate(token_id, &src, |account_data| {
-                    account_data.free_balance = account_data.free_balance.saturating_sub(amount)
+                    account_data.liquidity = account_data.liquidity.saturating_sub(amount)
                 })
             }
             DecOp::<T>::Remove(_, dust) => {
@@ -838,5 +690,18 @@ impl<T: Trait> Module<T> {
         let perc_of_issuance_staked = Percent::from_rational_approximation(stake, issuance);
         let net_allocation = percentage.mul_floor(allocation);
         perc_of_issuance_staked.mul_floor(net_allocation)
+    }
+
+    pub(crate) fn decrease_with_ex_deposit(
+        account_info: &AccountDataOf<T>,
+        existential_deposit: T::Balance,
+        amount: T::Balance,
+    ) -> Result<DecOp<T>, DispatchError> {
+        let now = <frame_system::Module<T>>::block_number();
+        account_info.decrease_with_ex_deposit::<T, T::BlockNumberToBalance>(
+            amount,
+            existential_deposit,
+            now,
+        )
     }
 }

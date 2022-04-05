@@ -50,8 +50,8 @@ decl_event! {
         /// Params:
         /// - token identifier
         /// - account tokens are unreserved from
-        /// - amount reserved
-        TokenAmountUnreservedFrom(TokenId, AccountId, Balance),
+        /// - amount unstacked (that was previously stacked)
+        RevenueSplitAbandoned(TokenId, AccountId, Balance),
 
         /// Patronage rate decreased
         /// Params:

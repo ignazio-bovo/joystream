@@ -1,10 +1,14 @@
+use codec::Encode;
 use frame_support::traits::Currency;
 use sp_arithmetic::traits::{One, Saturating, Zero};
 use sp_runtime::traits::Hash;
 use sp_runtime::Percent;
 
 use crate::tests::mock::*;
-use crate::types::{IssuanceState, PatronageData, SplitState, SplitTimeline, TransferPolicy};
+use crate::types::{
+    IssuanceState, LinearVestingSchedule, MerkleSide, PatronageData, SimpleLocation, SplitState,
+    SplitTimeline, SplitTimelineParameters, TransferPolicy, VerifiableLocation, VestingSchedule,
+};
 use crate::GenesisConfig;
 
 pub struct TokenDataBuilder<Balance, Hash, BlockNumber> {
@@ -122,13 +126,14 @@ impl GenesisConfigBuilder {
     pub fn with_account(
         mut self,
         account_id: AccountId,
-        free_balance: Balance,
-        reserved_balance: Balance,
+        liquidity: Balance,
+        staked_balance: Balance,
     ) -> Self {
         let id = self.next_token_id.saturating_sub(TokenId::one());
         let new_account_info = AccountData {
-            free_balance,
-            reserved_balance,
+            liquidity,
+            staked_balance,
+            vesting_schedule: None,
         };
 
         let new_issuance = self
@@ -137,7 +142,7 @@ impl GenesisConfigBuilder {
             .unwrap()
             .1
             .current_total_issuance
-            .saturating_add(Balance::from(free_balance.saturating_add(reserved_balance)));
+            .saturating_add(Balance::from(liquidity.saturating_add(reserved_balance)));
 
         self.account_info_by_token_and_account
             .push((id, account_id, new_account_info));
@@ -150,12 +155,69 @@ impl GenesisConfigBuilder {
         self
     }
 
+    pub fn with_vesting(
+        mut self,
+        account_id: AccountId,
+        vesting: VestingSchedule<BlockNumber, Balance>,
+    ) -> Self {
+        let token_id = self.next_token_id.saturating_sub(TokenId::one());
+        if token_id.is_zero() {
+            return self;
+        }
+        if let Some(&mut (_, _, account_info)) = self
+            .account_info_by_token_and_account
+            .iter_mut()
+            .find(|(_, id, _)| *id == account_id)
+        {
+            account_info.vesting_schedule = vesting;
+        }
+        self
+    }
+
     pub fn build(self) -> GenesisConfig<Test> {
         GenesisConfig::<Test> {
             account_info_by_token_and_account: self.account_info_by_token_and_account,
             token_info_by_id: self.token_info_by_id,
             next_token_id: self.next_token_id,
             symbols_used: self.symbols_used,
+        }
+    }
+}
+
+impl<BlockNumber: Copy + Saturating + PartialOrd> SplitTimelineParameters<BlockNumber> {
+    pub fn new(start: BlockNumber, duration: BlockNumber) -> Self {
+        Self { start, duration }
+    }
+}
+
+impl<AccountId> SimpleLocation<AccountId> {
+    pub fn new(account: AccountId) -> Self {
+        Self { account }
+    }
+}
+
+impl<BlockNumber, Balance> VestingSchedule<BlockNumber, Balance> {
+    pub fn new(
+        cliff: BlockNumber,
+        vesting_rate: Balance,
+        starting_block: BlockNumber,
+        duration: BlockNumber,
+    ) -> Self {
+        let vesting = LinearVestingSchedule::<BlockNumber, Balance> {
+            cliff,
+            vesting_rate,
+            starting_block,
+            duration,
+        };
+        Self(Some(vesting))
+    }
+}
+
+impl<AccountId: Encode, Hasher: Hash> VerifiableLocation<AccountId, Hasher> {
+    pub fn new(merkle_proof: Vec<(Hasher::Output, MerkleSide)>, account: AccountId) -> Self {
+        Self {
+            merkle_proof,
+            account,
         }
     }
 }
@@ -195,7 +257,7 @@ fn with_issuance_adds_issuance_to_token() {
 
 #[ignore]
 #[test]
-fn adding_account_with_free_balance_also_adds_issuance() {
+fn adding_account_with_liquidity_also_adds_issuance() {
     let token_params = TokenDataBuilder::new_empty().with_issuance(5).build();
     let mut builder = GenesisConfigBuilder::new_empty().with_token(1, token_params);
     builder = builder.with_account(1, 5, 5);

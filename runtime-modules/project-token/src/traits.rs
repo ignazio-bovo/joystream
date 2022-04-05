@@ -93,6 +93,6 @@ pub trait PalletToken<AccountId, Policy, IssuanceParams> {
     /// Finalize split by sending back eventual JOYs leftover
     fn finalize_revenue_split(token_id: Self::TokenId, account_id: AccountId) -> DispatchResult;
 
-    /// Unreserve split funds
-    fn unreserve(token_id: Self::TokenId, who: AccountId, amount: Self::Balance) -> DispatchResult;
+    /// Unstake funds and abandon revenue split
+    fn abandon_revenue_split(token_id: Self::TokenId, who: AccountId) -> DispatchResult;
 }

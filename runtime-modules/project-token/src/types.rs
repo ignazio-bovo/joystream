@@ -19,36 +19,24 @@ pub(crate) enum DecreaseOp<Balance> {
     /// Remove Account (original amonut, dust below ex deposit)
     Remove(Balance, Balance),
 }
-impl<Balance: Clone + Saturating> DecreaseOp<Balance> {
-    pub(crate) fn amount(&self) -> Balance {
-        match self {
-            Self::Reduce(amount) => amount.to_owned(),
-            Self::Remove(amount, _) => amount.to_owned(),
-        }
-    }
-    pub(crate) fn total_amount(&self) -> Balance {
-        match self {
-            Self::Reduce(amount) => amount.to_owned(),
-            Self::Remove(amount, dust) => amount.to_owned().saturating_add(dust.to_owned()),
-        }
-    }
-}
 
 /// Info for the account
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
-pub struct AccountData<Balance> {
+pub struct AccountData<Balance, BlockNumber> {
     /// Non-reserved part of the balance. There may still be restrictions
     /// on this, but it is the total pool what may in principle be
     /// transferred, reserved and used for tipping.
-    pub(crate) free_balance: Balance,
+    pub(crate) liquidity: Balance,
+
+    /// The (optional) cliff + linear vesting schedule for the account
+    pub(crate) vesting_schedule: VestingSchedule<BlockNumber, Balance>,
 
     /// This balance is a 'reserve' balance that other subsystems use
     /// in order to set aside tokens that are still 'owned' by the
     /// account holder, but which are not usable in any case.
-    pub(crate) reserved_balance: Balance,
+    pub(crate) staked_balance: Balance,
 }
 
-// TODO: add extra type for Reserve = JOY balance different from CRT balance?
 /// Info for the token
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
 pub struct TokenData<Balance, Hash, BlockNumber> {
@@ -197,10 +185,13 @@ pub struct LinearVestingSchedule<BlockNumber, Balance> {
 
     /// Duration
     duration: BlockNumber,
-
-    /// Base liquidity endowment accounted at starting_block
-    base_liquidity: Balance,
 }
+
+/// Newtype pattern for the vesting schedule
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
+pub struct VestingSchedule<BlockNumber, Balance>(
+    Option<LinearVestingSchedule<BlockNumber, Balance>>,
+);
 
 // implementation
 
@@ -212,33 +203,57 @@ impl Default for IssuanceState {
 }
 
 /// Default trait for AccountData
-impl<Balance: Zero> Default for AccountData<Balance> {
+impl<Balance: Zero, BlockNumber: Copy + PartialOrd + Saturating> Default
+    for AccountData<Balance, BlockNumber>
+{
     fn default() -> Self {
         Self {
-            free_balance: Balance::zero(),
-            reserved_balance: Balance::zero(),
+            liquidity: Balance::zero(),
+            staked_balance: Balance::zero(),
+            vesting_schedule: VestingSchedule::<BlockNumber, Balance>::default(),
         }
     }
 }
 
 /// Encapsules parameters validation + TokenData construction
-impl<Balance: Zero + Copy + PartialOrd + Saturating> AccountData<Balance> {
+impl<
+        Balance: Zero + Copy + PartialOrd + Ord + Saturating,
+        BlockNumber: Copy + PartialOrd + Saturating,
+    > AccountData<Balance, BlockNumber>
+{
+    /// CTOR
+    pub fn new(
+        liquidity: Balance,
+        vesting_schedule: VestingSchedule<BlockNumber, Balance>,
+    ) -> Self {
+        Self {
+            liquidity,
+            vesting_schedule,
+            staked_balance: Balance::zero(),
+        }
+    }
+
     /// Verify if amount can be decrease taking account existential deposit
     /// Returns the amount that should be removed
-    pub(crate) fn decrease_with_ex_deposit<T: crate::Trait>(
+    pub(crate) fn decrease_with_ex_deposit<T, BlockNumberToBalance>(
         &self,
         amount: Balance,
         existential_deposit: Balance,
-    ) -> Result<DecreaseOp<Balance>, DispatchError> {
+        block: BlockNumber,
+    ) -> Result<DecreaseOp<Balance>, DispatchError>
+    where
+        T: crate::Trait,
+        BlockNumberToBalance: Convert<BlockNumber, Balance>,
+    {
         ensure!(
-            self.free_balance >= amount,
+            self.spendable_balance::<BlockNumberToBalance>(block) >= amount,
             crate::Error::<T>::InsufficientFreeBalanceForDecreasing,
         );
 
         let new_total = self
-            .free_balance
+            .liquidity
             .saturating_sub(amount)
-            .saturating_add(self.reserved_balance);
+            .saturating_add(self.staked_balance);
 
         if new_total.is_zero() || new_total < existential_deposit {
             Ok(DecreaseOp::<Balance>::Remove(amount, new_total))
@@ -247,35 +262,42 @@ impl<Balance: Zero + Copy + PartialOrd + Saturating> AccountData<Balance> {
         }
     }
 
-    pub(crate) fn _total_balance(&self) -> Balance {
-        self.free_balance.saturating_add(self.reserved_balance)
+    pub(crate) fn spendable_balance<BlockNumberToBalance>(&self, block: BlockNumber) -> Balance
+    where
+        BlockNumberToBalance: Convert<BlockNumber, Balance>,
+    {
+        self.liquidity.saturating_sub(
+            self.vesting_schedule
+                .unvested::<BlockNumberToBalance>(block),
+        )
     }
 
-    pub(crate) fn ensure_can_reserve<T: crate::Trait>(&self, amount: Balance) -> DispatchResult {
+    pub(crate) fn ensure_can_stake<T: crate::Trait>(&self, amount: Balance) -> DispatchResult {
         ensure!(
-            self.free_balance >= amount,
+            self.liquidity >= amount,
             crate::Error::<T>::InsufficientFreeBalanceForReserving,
         );
 
         ensure!(
-            self.reserved_balance.is_zero(),
+            self.staked_balance.is_zero(),
             crate::Error::<T>::PreviousReservedAmountOutstanding,
         );
 
         Ok(())
     }
 
-    pub(crate) fn ensure_can_unreserve<T: crate::Trait>(&self, amount: Balance) -> DispatchResult {
-        ensure!(
-            self.reserved_balance >= amount,
-            crate::Error::<T>::InsufficientReservedBalance,
-        );
+    pub(crate) fn stake(&mut self, amount: Balance) {
+        self.liquidity = self.liquidity.saturating_sub(amount);
+        self.staked_balance = self.staked_balance.saturating_add(amount);
+    }
 
-        Ok(())
+    pub(crate) fn unstake(&mut self) {
+        self.liquidity = self.liquidity.saturating_add(self.staked_balance);
+        self.staked_balance = Balance::zero();
     }
 }
 /// Token Data implementation
-impl<Balance, Hash, BlockNumber> TokenData<Balance, Hash, BlockNumber> {
+impl<Balance: Clone, Hash, BlockNumber> TokenData<Balance, Hash, BlockNumber> {
     // validate transfer destination location according to self.policy
     pub(crate) fn ensure_valid_location_for_policy<T, AccountId, Location>(
         &self,
@@ -303,12 +325,6 @@ impl<AccountId: Clone, Hash> TransferLocationTrait<AccountId, TransferPolicy<Has
 
     fn location_account(&self) -> AccountId {
         self.account.to_owned()
-    }
-}
-
-impl<AccountId> SimpleLocation<AccountId> {
-    pub(crate) fn new(account: AccountId) -> Self {
-        Self { account }
     }
 }
 
@@ -345,13 +361,6 @@ impl<AccountId: Encode, Hasher: Hash> VerifiableLocation<AccountId, Hasher> {
             });
 
         proof_result == commit
-    }
-
-    pub fn new(merkle_proof: Vec<(Hasher::Output, MerkleSide)>, account: AccountId) -> Self {
-        Self {
-            merkle_proof,
-            account,
-        }
     }
 }
 
@@ -396,10 +405,6 @@ pub struct SplitTimelineParameters<BlockNumber> {
 }
 
 impl<BlockNumber: Copy + Saturating + PartialOrd> SplitTimelineParameters<BlockNumber> {
-    pub fn new(start: BlockNumber, duration: BlockNumber) -> Self {
-        Self { start, duration }
-    }
-
     pub(crate) fn try_build<T: crate::Trait>(
         self,
         now: BlockNumber,
@@ -433,53 +438,50 @@ impl<BlockNumber: Copy + Saturating + PartialOrd> SplitTimeline<BlockNumber> {
     }
 }
 
-impl<BlockNumber: PartialOrd + Copy + Saturating, Balance: Saturating + Copy + Zero>
-    LinearVestingSchedule<BlockNumber, Balance>
-{
-    pub fn new(
-        cliff: BlockNumber,
-        base_liquidity: Balance,
-        starting_block: BlockNumber,
-        duration: BlockNumber,
-        vesting_rate: Balance,
-    ) -> Self {
-        Self {
-            vesting_rate,
-            cliff,
-            starting_block,
-            duration,
-            base_liquidity,
-        }
+/// Default trait for Issuance state
+impl<BlockNumber, Balance> Default for VestingSchedule<BlockNumber, Balance> {
+    fn default() -> Self {
+        VestingSchedule(None)
     }
+}
 
-    pub fn vested_amount<BlockNumberToBalance>(&self, block: BlockNumber) -> Balance
+impl<BlockNumber: PartialOrd + Copy + Saturating, Balance: Saturating + Copy + Zero>
+    VestingSchedule<BlockNumber, Balance>
+{
+    /// Get unvested amount
+    pub fn unvested<BlockNumberToBalance>(&self, block: BlockNumber) -> Balance
     where
         BlockNumberToBalance: Convert<BlockNumber, Balance>,
     {
-        let effective_start = self.starting_block.saturating_add(self.cliff);
-        let end_block = effective_start.saturating_add(self.duration);
+        self.0.as_ref().map_or(Balance::zero(), |vesting| {
+            let effective_start = vesting.starting_block.saturating_add(vesting.cliff);
+            let end_block = effective_start.saturating_add(vesting.duration);
 
-        let block_count = if block >= end_block {
-            BlockNumberToBalance::convert(self.duration)
-        } else if block < end_block && block >= effective_start {
-            BlockNumberToBalance::convert(block.saturating_sub(effective_start))
-        } else {
-            Balance::zero()
-        };
+            let blocks_left = if block > end_block {
+                Balance::zero()
+            } else if block <= end_block && block > effective_start {
+                BlockNumberToBalance::convert(end_block.saturating_sub(block))
+            } else {
+                BlockNumberToBalance::convert(vesting.duration)
+            };
 
-        block_count
-            .saturating_mul(self.vesting_rate)
-            .saturating_add(self.base_liquidity)
+            blocks_left.saturating_mul(vesting.vesting_rate)
+        })
     }
 }
 
 // Aliases
 /// Alias for Account Data
-pub(crate) type AccountDataOf<T> = AccountData<<T as crate::Trait>::Balance>;
+pub(crate) type AccountDataOf<T> =
+    AccountData<<T as crate::Trait>::Balance, <T as frame_system::Trait>::BlockNumber>;
 
 /// Alias for Timeline parameters
 pub(crate) type TimelineParamsOf<T> =
     SplitTimelineParameters<<T as frame_system::Trait>::BlockNumber>;
+
+/// Alias for Vesting Schedule
+pub(crate) type VestingScheduleOf<T> =
+    VestingSchedule<<T as frame_system::Trait>::BlockNumber, <T as crate::Trait>::Balance>;
 
 /// Alias for Token Data
 pub(crate) type TokenDataOf<T> = TokenData<
