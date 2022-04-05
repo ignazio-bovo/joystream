@@ -175,22 +175,22 @@ impl Default for MerkleSide {
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
 pub struct LinearVestingSchedule<BlockNumber, Balance> {
     /// Vesting Rate: Amount of token at each block
-    vesting_rate: Balance,
+    pub(crate) vesting_rate: Balance,
 
     /// # of Blocks to wait until vesting mechanism starts after starting_block
-    cliff: BlockNumber,
+    pub(crate) cliff: BlockNumber,
 
     /// Starting block for the vesting schedule
-    starting_block: BlockNumber,
+    pub(crate) starting_block: BlockNumber,
 
     /// Duration
-    duration: BlockNumber,
+    pub(crate) duration: BlockNumber,
 }
 
 /// Newtype pattern for the vesting schedule
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
 pub struct VestingSchedule<BlockNumber, Balance>(
-    Option<LinearVestingSchedule<BlockNumber, Balance>>,
+    pub(crate) Option<LinearVestingSchedule<BlockNumber, Balance>>,
 );
 
 // implementation

@@ -1,7 +1,7 @@
 use codec::Encode;
 use frame_support::traits::Currency;
 use sp_arithmetic::traits::{One, Saturating, Zero};
-use sp_runtime::traits::Hash;
+use sp_runtime::traits::{Convert, Hash};
 use sp_runtime::Percent;
 
 use crate::tests::mock::*;
@@ -133,7 +133,7 @@ impl GenesisConfigBuilder {
         let new_account_info = AccountData {
             liquidity,
             staked_balance,
-            vesting_schedule: None,
+            vesting_schedule: VestingSchedule::<BlockNumber, Balance>::default(),
         };
 
         let new_issuance = self
@@ -142,7 +142,7 @@ impl GenesisConfigBuilder {
             .unwrap()
             .1
             .current_total_issuance
-            .saturating_add(Balance::from(liquidity.saturating_add(reserved_balance)));
+            .saturating_add(Balance::from(liquidity.saturating_add(staked_balance)));
 
         self.account_info_by_token_and_account
             .push((id, account_id, new_account_info));
@@ -155,7 +155,7 @@ impl GenesisConfigBuilder {
         self
     }
 
-    pub fn with_vesting(
+    pub fn with_vesting<Converter: Convert<BlockNumber, Balance>>(
         mut self,
         account_id: AccountId,
         vesting: VestingSchedule<BlockNumber, Balance>,
@@ -164,12 +164,17 @@ impl GenesisConfigBuilder {
         if token_id.is_zero() {
             return self;
         }
-        if let Some(&mut (_, _, account_info)) = self
+        if let Some(&mut (token_id, _, account_info)) = self
             .account_info_by_token_and_account
             .iter_mut()
             .find(|(_, id, _)| *id == account_id)
         {
             account_info.vesting_schedule = vesting;
+            let amount = vesting.total_amount::<Converter>();
+            let (tk_id, mut token_info) = self.token_info_by_id.pop().unwrap();
+            token_info.current_total_issuance =
+                token_info.current_total_issuance.saturating_add(amount);
+            self.token_info_by_id.push((tk_id, token_info))
         }
         self
     }
@@ -196,7 +201,7 @@ impl<AccountId> SimpleLocation<AccountId> {
     }
 }
 
-impl<BlockNumber, Balance> VestingSchedule<BlockNumber, Balance> {
+impl<BlockNumber, Balance: Zero + Saturating> VestingSchedule<BlockNumber, Balance> {
     pub fn new(
         cliff: BlockNumber,
         vesting_rate: Balance,
@@ -210,6 +215,13 @@ impl<BlockNumber, Balance> VestingSchedule<BlockNumber, Balance> {
             duration,
         };
         Self(Some(vesting))
+    }
+
+    pub fn total_amount<BlockNumberToBalance: Convert<BlockNumber, Balance>>(&self) -> Balance {
+        self.0.as_ref().map_or(Balance::zero(), |vesting| {
+            let duration_b = BlockNumberToBalance::convert(vesting.duration);
+            duration_b.saturating_mul(vesting.vesting_rate)
+        })
     }
 }
 
