@@ -810,7 +810,7 @@ fn participate_to_split_ok_with_user_account_free_balance_amount_decreased() {
         );
 
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, participant_id).reserved_balance,
+            Token::account_info_by_token_and_account(token_id, participant_id).staked_balance,
             to_stake,
         );
     })
@@ -911,7 +911,7 @@ fn claim_split_revenue_fails_with_invalid_account_id() {
 fn claim_split_revenue_fails_with_inactive_revenue_split_state() {
     let (token_id, issuance) = (token!(1), balance!(1_000));
     let timeline = timeline!(block!(1), block!(10));
-    let (treasury, allocation, percentage) = (treasury!(token_id), joys!(50), percent!(10));
+    let (treasury, allocation, _percentage) = (treasury!(token_id), joys!(50), percent!(10));
     let (participant_id, staked) = (account!(2), balance!(100));
 
     let token_data = TokenDataBuilder::new_empty()
@@ -1115,7 +1115,7 @@ fn claim_split_revenue_ok_with_user_reserved_amount_reset() {
                 participant_id,
             );
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, participant_id).reserved_balance,
+            Token::account_info_by_token_and_account(token_id, participant_id).staked_balance,
             balance!(0)
         );
     })
@@ -1183,9 +1183,8 @@ fn claim_split_revenue_ok_with_user_free_balance_increased() {
 }
 
 #[test]
-fn unreserved_fails_with_invalid_token_id() {
+fn abandon_revenue_splitd_fails_with_invalid_token_id() {
     let (token_id, pre_issuance) = (token!(1), balance!(900));
-    let timeline = timeline!(block!(1), block!(10));
     let (participant_id, staked) = (account!(2), balance!(100));
 
     let token_data = TokenDataBuilder::new_empty()
@@ -1197,18 +1196,18 @@ fn unreserved_fails_with_invalid_token_id() {
         .build();
 
     build_test_externalities(config).execute_with(|| {
-        let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
-            token_id + 1,
-            participant_id,
-            staked,
-        );
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::abandon_revenue_split(
+                token_id + 1,
+                participant_id,
+            );
 
         assert_noop!(result, Error::<Test>::TokenDoesNotExist);
     })
 }
 
 #[test]
-fn unreserved_fails_with_insufficient_reserved_balance() {
+fn abandon_revenue_splitd_fails_with_insufficient_staked_balance() {
     let (token_id, pre_issuance) = (token!(1), balance!(900));
     let (participant_id, staked) = (account!(2), balance!(100));
 
@@ -1221,20 +1220,20 @@ fn unreserved_fails_with_insufficient_reserved_balance() {
         .build();
 
     build_test_externalities(config).execute_with(|| {
-        let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
-            token_id,
-            participant_id,
-            staked,
-        );
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::abandon_revenue_split(
+                token_id,
+                participant_id,
+            );
 
         assert_noop!(result, Error::<Test>::InsufficientReservedBalance);
     })
 }
 
 #[test]
-fn unreserved_fails_with_invalid_account_id() {
+fn abandon_revenue_splitd_fails_with_invalid_account_id() {
     let (token_id, pre_issuance) = (token!(1), balance!(900));
-    let (participant_id, staked) = (account!(2), balance!(100));
+    let (participant_id, _staked) = (account!(2), balance!(100));
 
     let token_data = TokenDataBuilder::new_empty()
         .with_issuance(pre_issuance)
@@ -1244,18 +1243,18 @@ fn unreserved_fails_with_invalid_account_id() {
         .build();
 
     build_test_externalities(config).execute_with(|| {
-        let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
-            token_id,
-            participant_id,
-            staked,
-        );
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::abandon_revenue_split(
+                token_id,
+                participant_id,
+            );
 
         assert_noop!(result, Error::<Test>::AccountInformationDoesNotExist);
     })
 }
 
 #[test]
-fn unreserved_ok() {
+fn abandon_revenue_splitd_ok() {
     let (token_id, pre_issuance) = (token!(1), balance!(900));
     let (participant_id, staked) = (account!(2), balance!(100));
 
@@ -1268,18 +1267,18 @@ fn unreserved_ok() {
         .build();
 
     build_test_externalities(config).execute_with(|| {
-        let result = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
-            token_id,
-            participant_id,
-            staked,
-        );
+        let result =
+            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::abandon_revenue_split(
+                token_id,
+                participant_id,
+            );
 
         assert_ok!(result);
     })
 }
 
 #[test]
-fn unreserved_ok_with_event_deposit() {
+fn abandon_revenue_splitd_ok_with_event_deposit() {
     let (token_id, pre_issuance) = (token!(1), balance!(900));
     let (account_id, staked) = (account!(2), balance!(100));
 
@@ -1292,18 +1291,18 @@ fn unreserved_ok_with_event_deposit() {
         .build();
 
     build_test_externalities(config).execute_with(|| {
-        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
-            token_id, account_id, staked,
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::abandon_revenue_split(
+            token_id, account_id,
         );
 
-        last_event_eq!(RawEvent::TokenAmountUnreservedFrom(
+        last_event_eq!(RawEvent::RevenueSplitAbandoned(
             token_id, account_id, staked
         ));
     })
 }
 
 #[test]
-fn unreserved_ok_with_reserved_amount_zero() {
+fn abandon_revenue_splitd_ok_with_reserved_amount_zero() {
     let (token_id, pre_issuance) = (token!(1), balance!(900));
     let (account_id, staked) = (account!(2), balance!(100));
 
@@ -1316,19 +1315,19 @@ fn unreserved_ok_with_reserved_amount_zero() {
         .build();
 
     build_test_externalities(config).execute_with(|| {
-        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
-            token_id, account_id, staked,
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::abandon_revenue_split(
+            token_id, account_id,
         );
 
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, account_id).stacked_balance(),
+            Token::account_info_by_token_and_account(token_id, account_id).staked_balance,
             balance!(0)
         );
     })
 }
 
 #[test]
-fn unreserved_ok_with_free_balance_increased() {
+fn abandon_revenue_splitd_ok_with_free_balance_increased() {
     let (token_id, pre_issuance) = (token!(1), balance!(900));
     let (account_id, staked) = (account!(2), balance!(100));
 
@@ -1341,8 +1340,8 @@ fn unreserved_ok_with_free_balance_increased() {
         .build();
 
     build_test_externalities(config).execute_with(|| {
-        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::unreserve(
-            token_id, account_id, staked,
+        let _ = <Token as PalletToken<AccountId, Policy, IssuanceParams>>::abandon_revenue_split(
+            token_id, account_id,
         );
 
         assert_eq!(

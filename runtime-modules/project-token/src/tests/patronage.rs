@@ -28,7 +28,7 @@ fn deposit_creating_ok() {
 }
 
 #[test]
-fn deposit_creating_ok_with_destination_free_balance_increase() {
+fn deposit_creating_ok_with_destination_liquidity_increase() {
     let patronage_rate = Percent::from_percent(1);
     let token_id = token!(1);
     let account_id = account!(1);
@@ -44,7 +44,7 @@ fn deposit_creating_ok_with_destination_free_balance_increase() {
 
         assert_eq!(
             amount,
-            Token::account_info_by_token_and_account(token_id, account_id).free_balance,
+            Token::account_info_by_token_and_account(token_id, account_id).liquidity,
         );
     })
 }
@@ -114,39 +114,39 @@ fn deposit_creating_ok_with_patronage_and_issuance_increase() {
 }
 
 #[test]
-fn deposit_creating_ok_with_free_balance_addition_to_existing_account() {
+fn deposit_creating_ok_with_liquidity_addition_to_existing_account() {
     let token_id = token!(1);
     let account_id = account!(1);
-    let (initial_free_balance, initial_reserved) = (balance!(10), balance!(0));
+    let (initial_liquidity, initial_reserved) = (balance!(10), balance!(0));
     let amount = balance!(10);
 
     let params = TokenDataBuilder::new_empty();
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, params.build())
-        .with_account(account_id, initial_free_balance, initial_reserved)
+        .with_account(account_id, initial_liquidity, initial_reserved)
         .build();
 
     build_test_externalities(config).execute_with(|| {
         let _ = Token::deposit_creating(token_id, account_id, amount);
 
         assert_eq!(
-            initial_free_balance.saturating_add(amount),
-            Token::account_info_by_token_and_account(token_id, account_id).free_balance,
+            initial_liquidity.saturating_add(amount),
+            Token::account_info_by_token_and_account(token_id, account_id).liquidity,
         );
     })
 }
 
 #[test]
-fn deposit_creating_ok_without_reserved_balance_addition_to_existing_account() {
+fn deposit_creating_ok_without_staked_balance_addition_to_existing_account() {
     let token_id = token!(1);
     let account_id = account!(1);
-    let (initial_free_balance, initial_reserved) = (balance!(10), balance!(0));
+    let (initial_liquidity, initial_reserved) = (balance!(10), balance!(0));
     let amount = balance!(10);
 
     let params = TokenDataBuilder::new_empty();
     let config = GenesisConfigBuilder::new_empty()
         .with_token(token_id, params.build())
-        .with_account(account_id, initial_free_balance, initial_reserved)
+        .with_account(account_id, initial_liquidity, initial_reserved)
         .build();
 
     build_test_externalities(config).execute_with(|| {
@@ -154,7 +154,7 @@ fn deposit_creating_ok_without_reserved_balance_addition_to_existing_account() {
 
         assert_eq!(
             initial_reserved,
-            Token::account_info_by_token_and_account(token_id, account_id).reserved_balance,
+            Token::account_info_by_token_and_account(token_id, account_id).staked_balance,
         );
     })
 }
@@ -359,7 +359,7 @@ fn claim_patronage_ok_with_credit_accounting() {
         );
 
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, owner_account_id).free_balance,
+            Token::account_info_by_token_and_account(token_id, owner_account_id).liquidity,
             credit,
         );
     })

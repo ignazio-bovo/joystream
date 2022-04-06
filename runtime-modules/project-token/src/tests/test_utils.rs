@@ -164,13 +164,13 @@ impl GenesisConfigBuilder {
         if token_id.is_zero() {
             return self;
         }
-        if let Some(&mut (token_id, _, account_info)) = self
+        if let Some((_, _, account_info)) = self
             .account_info_by_token_and_account
             .iter_mut()
-            .find(|(_, id, _)| *id == account_id)
+            .find(|&&mut (_, id, _)| id == account_id)
         {
-            account_info.vesting_schedule = vesting;
             let amount = vesting.total_amount::<Converter>();
+            account_info.vesting_schedule = vesting;
             let (tk_id, mut token_info) = self.token_info_by_id.pop().unwrap();
             token_info.current_total_issuance =
                 token_info.current_total_issuance.saturating_add(amount);
@@ -201,7 +201,7 @@ impl<AccountId> SimpleLocation<AccountId> {
     }
 }
 
-impl<BlockNumber, Balance: Zero + Saturating> VestingSchedule<BlockNumber, Balance> {
+impl<BlockNumber: Clone, Balance: Zero + Saturating + Clone> VestingSchedule<BlockNumber, Balance> {
     pub fn new(
         cliff: BlockNumber,
         vesting_rate: Balance,
@@ -219,8 +219,8 @@ impl<BlockNumber, Balance: Zero + Saturating> VestingSchedule<BlockNumber, Balan
 
     pub fn total_amount<BlockNumberToBalance: Convert<BlockNumber, Balance>>(&self) -> Balance {
         self.0.as_ref().map_or(Balance::zero(), |vesting| {
-            let duration_b = BlockNumberToBalance::convert(vesting.duration);
-            duration_b.saturating_mul(vesting.vesting_rate)
+            let duration_b = BlockNumberToBalance::convert(vesting.duration.to_owned());
+            duration_b.saturating_mul(vesting.vesting_rate.to_owned())
         })
     }
 }

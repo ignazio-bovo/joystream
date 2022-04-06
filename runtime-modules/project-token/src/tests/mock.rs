@@ -113,6 +113,7 @@ impl Trait for Test {
     type TokenId = u64;
     type MinRevenueSplitDuration = MinRevenueSplitDuration;
     type ModuleId = TokenModuleId;
+    type BlockNumberToBalance = Block2Balance;
 }
 
 /// Implement pallet balances trait for Test
@@ -159,6 +160,15 @@ pub fn increase_block_number_by(n: u64) {
         <Token as OnInitialize<u64>>::on_initialize(System::block_number());
         <System as OnInitialize<u64>>::on_initialize(System::block_number());
     })
+}
+
+// Types needed in crate::Trait
+pub struct Block2Balance {}
+
+impl sp_runtime::traits::Convert<BlockNumber, Balance> for Block2Balance {
+    fn convert(a: BlockNumber) -> Balance {
+        a as u64
+    }
 }
 
 // helper macros

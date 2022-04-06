@@ -150,7 +150,7 @@ pub struct SimpleLocation<AccountId> {
 /// Transfer location with merkle proof
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
 pub struct VerifiableLocation<AccountId, Hasher: Hash> {
-    merkle_proof: Vec<(Hasher::Output, MerkleSide)>,
+    pub merkle_proof: Vec<(Hasher::Output, MerkleSide)>,
     pub account: AccountId,
 }
 

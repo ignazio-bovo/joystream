@@ -1,6 +1,6 @@
 #![cfg(test)]
 use frame_support::{assert_noop, assert_ok, StorageDoubleMap};
-use sp_arithmetic::traits::{One, Zero};
+use sp_arithmetic::traits::One;
 use sp_runtime::traits::Hash;
 
 use crate::tests::mock::*;
@@ -114,7 +114,7 @@ fn permissionless_transfer_fails_with_non_existing_destination() {
 }
 
 #[test]
-fn permissionless_transfer_fails_with_source_not_having_sufficient_free_balance() {
+fn permissionless_transfer_fails_with_source_not_having_sufficient_liquidity() {
     let token_id = token!(1);
     let amount = Balance::from(100u32);
     let src_balance = amount.saturating_sub(Balance::one());
@@ -254,7 +254,7 @@ fn permissionless_transfer_ok_with_ex_deposit_and_without_src_removal() {
 
         assert_eq!(
             src_balance.saturating_sub(amount),
-            Token::account_info_by_token_and_account(token_id, src).free_balance
+            Token::account_info_by_token_and_account(token_id, src).liquidity
         );
     })
 }
@@ -315,7 +315,7 @@ fn permissionless_transfer_ok_with_destination_receiving_funds() {
         );
 
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, dst).free_balance,
+            Token::account_info_by_token_and_account(token_id, dst).liquidity,
             amount
         );
     })
@@ -736,7 +736,7 @@ fn permissioned_transfer_ok_without_src_removal() {
 
         assert_eq!(
             src_balance.saturating_sub(amount),
-            Token::account_info_by_token_and_account(token_id, src).free_balance
+            Token::account_info_by_token_and_account(token_id, src).liquidity
         );
     })
 }
@@ -1170,7 +1170,7 @@ fn permissioned_multi_out_ok_with_ex_deposit_and_without_source_removal() {
         );
 
         assert_eq!(
-            Token::account_info_by_token_and_account(token_id, src).free_balance,
+            Token::account_info_by_token_and_account(token_id, src).liquidity,
             src_balance - amount1 - amount2,
         );
     })
