@@ -12,9 +12,6 @@ decl_error! {
         /// Reserved balance is insufficient for unfreezing specified amount
         InsufficientReservedBalance,
 
-        /// Free balance is insufficient for slashing specified amount
-        InsufficientFreeBalanceForDecreasing,
-
         /// Free balance is insufficient for transferring specfied amount
         InsufficientFreeBalanceForTransfer,
 

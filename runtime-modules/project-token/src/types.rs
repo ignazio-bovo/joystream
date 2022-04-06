@@ -247,7 +247,7 @@ impl<
     {
         ensure!(
             self.spendable_balance::<BlockNumberToBalance>(block) >= amount,
-            crate::Error::<T>::InsufficientFreeBalanceForDecreasing,
+            crate::Error::<T>::InsufficientFreeBalanceForTransfer,
         );
 
         let new_total = self

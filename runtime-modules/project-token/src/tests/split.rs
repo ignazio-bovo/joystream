@@ -1207,30 +1207,6 @@ fn abandon_revenue_splitd_fails_with_invalid_token_id() {
 }
 
 #[test]
-fn abandon_revenue_splitd_fails_with_insufficient_staked_balance() {
-    let (token_id, pre_issuance) = (token!(1), balance!(900));
-    let (participant_id, staked) = (account!(2), balance!(100));
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_issuance(pre_issuance)
-        .build();
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_data)
-        .with_account(participant_id, 0, staked - 1)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result =
-            <Token as PalletToken<AccountId, Policy, IssuanceParams>>::abandon_revenue_split(
-                token_id,
-                participant_id,
-            );
-
-        assert_noop!(result, Error::<Test>::InsufficientReservedBalance);
-    })
-}
-
-#[test]
 fn abandon_revenue_splitd_fails_with_invalid_account_id() {
     let (token_id, pre_issuance) = (token!(1), balance!(900));
     let (participant_id, _staked) = (account!(2), balance!(100));
