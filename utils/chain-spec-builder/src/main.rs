@@ -24,7 +24,7 @@ use structopt::StructOpt;
 
 use joystream_node::chain_spec::{
     self, chain_spec_properties, content_config, forum_config, initial_balances, initial_members,
-    AccountId,
+    project_token_config, AccountId,
 };
 
 use sc_chain_spec::ChainType;
@@ -230,6 +230,11 @@ fn genesis_constructor(
         _ => content_config::testing_config(),
     };
 
+    let project_token_config = match deployment {
+        ChainDeployment::live => project_token_config::production_config(),
+        _ => project_token_config::testing_config(),
+    };
+
     chain_spec::testnet_genesis(
         authorities,
         sudo_account.clone(),
@@ -238,6 +243,7 @@ fn genesis_constructor(
         forum_cfg,
         initial_account_balances,
         content_config,
+        project_token_config,
     )
 }
 

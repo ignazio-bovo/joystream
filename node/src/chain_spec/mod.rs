@@ -32,8 +32,8 @@ use sp_runtime::Perbill;
 
 use node_runtime::{
     membership, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig, Balance, BalancesConfig,
-    ContentConfig, ForumConfig, GrandpaConfig, ImOnlineConfig, MembersConfig, SessionConfig,
-    SessionKeys, Signature, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
+    ContentConfig, ForumConfig, GrandpaConfig, ImOnlineConfig, MembersConfig, ProjectTokenConfig,
+    SessionConfig, SessionKeys, Signature, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
 };
 
 // Exported to be used by chain-spec-builder
@@ -44,6 +44,7 @@ pub mod council_config;
 pub mod forum_config;
 pub mod initial_balances;
 pub mod initial_members;
+pub mod project_token_config;
 
 type AccountPublic = <Signature as Verify>::Signer;
 
@@ -135,6 +136,7 @@ impl Alternative {
                         forum_config::empty(get_account_id_from_seed::<sr25519::Public>("Alice")),
                         vec![],
                         content_config::testing_config(),
+                        project_token_config::testing_config(),
                     )
                 },
                 Vec::new(),
@@ -172,6 +174,7 @@ impl Alternative {
                         forum_config::empty(get_account_id_from_seed::<sr25519::Public>("Alice")),
                         vec![],
                         content_config::testing_config(),
+                        project_token_config::testing_config(),
                     )
                 },
                 Vec::new(),
@@ -214,6 +217,7 @@ pub fn testnet_genesis(
     forum_config: ForumConfig,
     initial_balances: Vec<(AccountId, Balance)>,
     content_config: ContentConfig,
+    project_token_config: ProjectTokenConfig,
 ) -> GenesisConfig {
     const STASH: Balance = 5_000;
     const ENDOWMENT: Balance = 100_000_000;
@@ -274,6 +278,7 @@ pub fn testnet_genesis(
         membership: Some(MembersConfig { members }),
         forum: Some(forum_config),
         content: Some(content_config),
+        project_token: Some(project_token_config),
     }
 }
 
@@ -332,6 +337,7 @@ pub(crate) mod tests {
             forum_config::empty(get_account_id_from_seed::<sr25519::Public>("Alice")),
             vec![],
             content_config::testing_config(),
+            project_token_config::testing_config(),
         )
     }
 
