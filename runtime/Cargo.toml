@@ -78,6 +78,7 @@ staking-handler = { package = 'pallet-staking-handler', default-features = false
 bounty = { package = 'pallet-bounty', default-features = false, path = '../runtime-modules/bounty'}
 blog = { package = 'pallet-blog', default-features = false, path = '../runtime-modules/blog'}
 content = { package = 'pallet-content', default-features = false, path = '../runtime-modules/content'}
+project-token = { package = 'pallet-project-token', default-features = false, path = '../runtime-modules/project-token'}
 joystream-utility = { package = 'pallet-utility', default-features = false, path = '../runtime-modules/utility'}
 
 [dev-dependencies]
@@ -153,6 +154,7 @@ std = [
     'blog/std',
     'joystream-utility/std',
     'content/std',
+    'project-token/std',  
 ]
 runtime-benchmarks = [
     "hex-literal",

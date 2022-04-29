@@ -1,3 +1,6 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit = "512"]
+
 use codec::FullCodec;
 use core::default::Default;
 use frame_support::{
@@ -14,10 +17,13 @@ use sp_runtime::{
 };
 use sp_std::collections::btree_map::BTreeMap;
 use sp_std::iter::Sum;
+use sp_std::vec::Vec;
 
 // crate modules
+
 mod errors;
 mod events;
+#[cfg(test)]
 mod tests;
 mod traits;
 mod types;

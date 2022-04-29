@@ -70,6 +70,7 @@ pub use primitives::*;
 pub use proposals_configuration::*;
 pub use runtime_api::*;
 
+use integration::project_token::BlockNumberToBalance;
 use integration::proposals::{CouncilManager, ExtrinsicProposalEncoder};
 
 use common::working_group::{WorkingGroup, WorkingGroupBudgetHandler};
@@ -1157,6 +1158,22 @@ impl blog::Trait<BlogInstance> for Runtime {
 /// Forum identifier for category
 pub type CategoryId = u64;
 
+parameter_types! {
+    pub const TokenModuleId: ModuleId = ModuleId(*b"modToken");
+    pub const BlocksPerYear: u32 = 5259487; // floor(seconds in a year / 6s) , 1 block every 6s
+}
+
+impl project_token::Trait for Runtime {
+    type Event = Event;
+    type Balance = Balance;
+    type TokenId = TokenId;
+    type BlockNumberToBalance = BlockNumberToBalance;
+    type ModuleId = TokenModuleId;
+    type ReserveExistentialDeposit = ExistentialDeposit;
+    type ReserveCurrency = Balances;
+    type BlocksPerYear = BlocksPerYear;
+}
+
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
 /// of data like extrinsics, allowing for them to continue syncing the network through upgrades
@@ -1223,5 +1240,7 @@ construct_runtime!(
         OperationsWorkingGroupBeta: working_group::<Instance7>::{Module, Call, Storage, Event<T>},
         OperationsWorkingGroupGamma: working_group::<Instance8>::{Module, Call, Storage, Event<T>},
         DistributionWorkingGroup: working_group::<Instance9>::{Module, Call, Storage, Event<T>},
+        // -- Project Token --
+        ProjectToken: project_token::{Module, Call, Storage, Event<T>, Config<T>},
     }
 );

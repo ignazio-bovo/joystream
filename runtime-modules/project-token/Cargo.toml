@@ -22,7 +22,6 @@ balances = { package = 'pallet-balances', default-features = false, git = 'https
 default = ['std']
 std = [
 	'sp-std/std',
-	'sp-io/std',    
 	'sp-runtime/std',
 	'frame-support/std',
 	'frame-system/std',

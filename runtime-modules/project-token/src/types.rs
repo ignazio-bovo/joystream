@@ -4,6 +4,8 @@ use frame_support::{
     ensure,
     traits::Get,
 };
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{
     AtLeast32BitUnsigned, Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
@@ -12,8 +14,10 @@ use sp_runtime::{PerThing, Permill, Perquintill, SaturatedConversion};
 use sp_std::collections::btree_map::{BTreeMap, IntoIter, Iter};
 use sp_std::convert::From;
 use sp_std::iter::Sum;
+use sp_std::vec::Vec;
 
 /// Info for the account
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
 pub struct AccountData<Balance, ReserveBalance> {
     /// Non-reserved part of the balance. There may still be restrictions
@@ -32,6 +36,7 @@ pub struct AccountData<Balance, ReserveBalance> {
 }
 
 /// Info for the token
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
 pub struct TokenData<Balance, Hash, BlockNumber> {
     /// Current token supply
@@ -54,6 +59,7 @@ pub struct TokenData<Balance, Hash, BlockNumber> {
 }
 
 /// Patronage information, patronage configuration = set of values for its fields
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
 pub struct PatronageData<Balance, BlockNumber> {
     /// Patronage rate
@@ -67,6 +73,7 @@ pub struct PatronageData<Balance, BlockNumber> {
 }
 
 /// The two possible transfer policies
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
 pub enum TransferPolicy<Hash> {
     /// Permissionless
@@ -83,6 +90,7 @@ impl<Hash> Default for TransferPolicy<Hash> {
 }
 
 /// The possible offering variants: This is a stub
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum OfferingState {
     /// Initial idle state
@@ -97,6 +105,7 @@ pub(crate) enum OfferingState {
 }
 
 /// Builder for the token data struct
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default)]
 pub struct TokenIssuanceParameters<Balance, Hash> {
     /// Initial supply
@@ -113,6 +122,7 @@ pub struct TokenIssuanceParameters<Balance, Hash> {
 }
 
 /// Utility enum used in merkle proof verification
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug, Copy)]
 pub enum MerkleSide {
     /// This element appended to the right of the subtree hash
@@ -123,18 +133,22 @@ pub enum MerkleSide {
 }
 
 /// Yearly rate used for patronage info initialization
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug, Copy, Default)]
 pub struct YearlyRate(pub Permill);
 
 /// Block rate used for patronage accounting
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug, Copy, PartialOrd, Default)]
 pub struct BlockRate(pub Perquintill);
 
 /// Wrapper around a merkle proof path
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
 pub struct MerkleProof<Hasher: Hash>(pub Vec<(Hasher::Output, MerkleSide)>);
 
 /// Information about a payment
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
 pub struct Payment<Balance> {
     /// Ignored by runtime
@@ -145,8 +159,9 @@ pub struct Payment<Balance> {
 }
 
 /// Wrapper around BTreeMap<AccountId, Payment<Balance>>
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
-pub struct Transfers<AccountId, Balance>(pub BTreeMap<AccountId, Payment<Balance>>);
+pub struct Transfers<AccountId: Ord, Balance>(pub BTreeMap<AccountId, Payment<Balance>>);
 
 /// Default trait for Merkle Side
 impl Default for MerkleSide {
@@ -336,7 +351,7 @@ impl<Hasher: Hash> MerkleProof<Hasher> {
     }
 }
 
-impl<AccountId, Balance: Sum + Copy> Transfers<AccountId, Balance> {
+impl<AccountId: Ord, Balance: Sum + Copy> Transfers<AccountId, Balance> {
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -354,7 +369,7 @@ impl<AccountId, Balance: Sum + Copy> Transfers<AccountId, Balance> {
     }
 }
 
-impl<AccountId, Balance> From<Transfers<AccountId, Balance>>
+impl<AccountId: Ord, Balance> From<Transfers<AccountId, Balance>>
     for BTreeMap<AccountId, Payment<Balance>>
 {
     fn from(v: Transfers<AccountId, Balance>) -> Self {
