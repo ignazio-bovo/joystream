@@ -5,7 +5,7 @@ pub fn testing_config() -> ProjectTokenConfig {
         account_info_by_token_and_account: vec![],
         token_info_by_id: vec![],
         next_token_id: 1,
-        bloat_bond: 0,
+        bloat_bond: 10,
         symbol_used: vec![],
     }
 }
@@ -15,7 +15,7 @@ pub fn production_config() -> ProjectTokenConfig {
         account_info_by_token_and_account: vec![],
         token_info_by_id: vec![],
         next_token_id: 1,
-        bloat_bond: 10, // TODO(Ephesus): update bloat bond
+        bloat_bond: 10,
         symbol_used: vec![],
     }
 }
