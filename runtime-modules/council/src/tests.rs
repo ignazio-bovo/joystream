@@ -1773,9 +1773,8 @@ fn council_many_cycle_rewards() {
         let origin = OriginType::Root;
         Mocks::set_budget(origin.clone(), u64::MAX.into(), Ok(()));
         for i in 0..num_iterations {
-            let iters = i * council_settings.cycle_duration;
             let tmp_params = Mocks::run_full_council_cycle(
-                iters,
+                i * council_settings.cycle_duration,
                 &council_members,
                 0,
             );
