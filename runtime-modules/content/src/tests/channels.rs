@@ -478,7 +478,7 @@ fn unsuccessful_channel_update_with_insufficient_balance() {
             })
             .call();
 
-        assert_err!(result, storage::Error::<Test>::InsufficientBalance);
+        assert_err!(result, storage::Error::<Test>::InsufficientBalanceForUploading);
     })
 }
 

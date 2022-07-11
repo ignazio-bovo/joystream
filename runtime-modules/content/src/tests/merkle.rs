@@ -947,7 +947,7 @@ fn unsuccessfull_channel_payouts_update_with_insufficient_uploader_account_balan
 
         UpdateChannelPayoutsFixture::default()
             .with_payload(Some(payload_params))
-            .call_and_assert(Err(storage::Error::<Test>::InsufficientBalance.into()));
+            .call_and_assert(Err(storage::Error::<Test>::InsufficientBalanceForUploading.into()));
     })
 }
 

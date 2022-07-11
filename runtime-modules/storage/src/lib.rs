@@ -1583,8 +1583,8 @@ decl_error! {
         /// Invalid storage provider for bucket.
         InvalidStorageProvider,
 
-        /// Insufficient balance for an operation.
-        InsufficientBalance,
+        /// Insufficient balance for an upload.
+        InsufficientBalanceForUploading,
 
         /// Data object doesn't exist.
         DataObjectDoesntExist,
@@ -4473,7 +4473,7 @@ impl<T: Config> Module<T> {
         ensure!(
             Balances::<T>::usable_balance(account_id)
                 >= state_bloat_bond_request.saturating_add(storage_fee),
-            Error::<T>::InsufficientBalance
+            Error::<T>::InsufficientBalanceForUploading
         );
 
         Ok(())

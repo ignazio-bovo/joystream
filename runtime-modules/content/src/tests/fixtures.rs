@@ -4879,30 +4879,6 @@ pub fn create_default_member_owned_channel_with_video_with_collaborator_permissi
     create_default_member_owned_channel_with_videos(1, collaborator_permissions)
 }
 
-pub fn create_default_member_owned_channel_with_video_with_storage_buckets(
-    include_storage_buckets: bool,
-    state_bloat_bond: u64,
-) {
-    create_default_member_owned_channel_with_storage_buckets(
-        include_storage_buckets,
-        state_bloat_bond,
-        &[],
-    );
-
-    set_default_nft_limits();
-
-    let _ = CreateVideoFixture::default()
-        .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
-        .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
-        .with_data_object_state_bloat_bond(state_bloat_bond)
-        .with_assets(StorageAssets::<Test> {
-            expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
-            object_creation_list: create_data_objects_helper(),
-        })
-        .with_channel_id(NextChannelId::<Test>::get() - 1)
-        .call();
-}
-
 pub fn create_default_curator_owned_channel_with_video(
     state_bloat_bond: u64,
     permissions: &[ChannelActionPermission],

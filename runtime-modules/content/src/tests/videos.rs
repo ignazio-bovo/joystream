@@ -397,17 +397,15 @@ fn unsuccessful_video_creation_with_insufficient_balance() {
         );
         slash_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID);
 
-        CreateVideoFixture::default()
-            .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
-            .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
+        let result = CreateVideoFixture::default()
             .with_data_object_state_bloat_bond(data_object_state_bloat_bond)
             .with_assets(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: create_data_objects_helper(),
             })
-            .call_and_assert(Err(
-                Error::<Test>::InsufficientBalanceForVideoCreation.into()
-            ));
+            .call();
+
+        assert_err!(result, storage::Error::<Test>::InsufficientBalanceForUploading);
     })
 }
 
@@ -864,30 +862,22 @@ fn unsuccessful_video_update_with_invalid_expected_data_size_fee() {
 }
 
 #[test]
-fn unsuccessful_video_update_with_insufficient_balance() {
+fn unsuccessful_video_update_with_insufficient_balance_for_uploading() {
+    pub const DATA_BLOAT_BOND: u64 = 10;
     with_default_mock_builder(|| {
-        run_to_block(1);
-
-        let data_object_state_bloat_bond = 10;
-        set_data_object_state_bloat_bond(data_object_state_bloat_bond);
-
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-        create_default_member_owned_channel_with_video_with_storage_buckets(
-            true,
-            data_object_state_bloat_bond,
-        );
+        ContentTest::default().with_video().setup();
+        set_data_object_state_bloat_bond(DATA_BLOAT_BOND);
         slash_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID);
 
         let result = UpdateVideoFixture::default()
-            .with_data_object_state_bloat_bond(data_object_state_bloat_bond)
+            .with_data_object_state_bloat_bond(DATA_BLOAT_BOND)
             .with_assets_to_upload(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: create_data_objects_helper(),
             })
             .call();
 
-        assert_err!(result, storage::Error::<Test>::InsufficientBalance);
+        assert_err!(result, storage::Error::<Test>::InsufficientBalanceForUploading);
     })
 }
 

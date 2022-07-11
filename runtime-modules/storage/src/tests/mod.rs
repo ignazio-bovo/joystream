@@ -1257,7 +1257,7 @@ fn upload_fails_with_insufficient_balance_for_state_bloat_bond() {
         UploadFixture::default()
             .with_params(upload_params)
             .with_expected_data_object_state_bloat_bond(data_object_state_bloat_bond)
-            .call_and_assert(Err(Error::<Test>::InsufficientBalance.into()));
+            .call_and_assert(Err(Error::<Test>::InsufficientBalanceForUploading.into()));
     });
 }
 
@@ -1319,7 +1319,7 @@ fn upload_fails_with_insufficient_balance_for_data_size_fee() {
 
         UploadFixture::default()
             .with_params(upload_params)
-            .call_and_assert(Err(Error::<Test>::InsufficientBalance.into()));
+            .call_and_assert(Err(Error::<Test>::InsufficientBalanceForUploading.into()));
     });
 }
 

@@ -356,7 +356,6 @@ pub fn build_test_externalities_with_genesis() -> sp_io::TestExternalities {
 
     t.into()
 }
-
 // working group integration
 pub struct StorageWG;
 pub struct DistributionWG;
