@@ -430,7 +430,7 @@ fn buy_now_ok_with_nft_owner_channel_correctly_credited() {
         let video_id = 1u64;
         ContentTest::with_member_channel().setup();
 
-        CreateVideoFixture::default()
+        let _ = CreateVideoFixture::default()
             .with_nft_in_sale(DEFAULT_NFT_PRICE)
             .call();
 

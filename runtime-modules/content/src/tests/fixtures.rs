@@ -1159,7 +1159,6 @@ impl DeleteChannelFixture {
     pub fn with_channel_id(self, channel_id: ChannelId) -> Self {
         Self { channel_id, ..self }
     }
-
 }
 
 impl ChannelDeletion for DeleteChannelFixture {
@@ -1753,13 +1752,20 @@ impl VideoDeletion for DeleteVideoAsModeratorFixture {
     }
 
     fn execute_call(&self) -> DispatchResult {
-        Content::delete_video_as_moderator(
-            Origin::signed(self.sender.clone()),
-            self.actor.clone(),
-            self.video_id,
-            self.num_objects_to_delete,
-            self.rationale.clone(),
-        )
+        let state_pre = sp_io::storage::root(sp_storage::StateVersion::V1);
+        let result = super::mock::Call::Content(crate::Call::<Test>::delete_video_as_moderator {
+            actor: self.actor.clone(),
+            video_id: self.video_id,
+            num_objects_to_delete: self.num_objects_to_delete,
+            rationale: self.rationale.clone(),
+        })
+        .dispatch(Origin::signed(self.sender));
+
+        if result.is_err() {
+            let state_post = sp_io::storage::root(sp_storage::StateVersion::V1);
+            assert_eq!(state_pre, state_post, "State has changed");
+        }
+        result.map(|_| ()).map_err(|e| e.error)
     }
 
     fn expected_event_on_success(&self) -> MetaEvent {
@@ -4885,7 +4891,7 @@ pub fn create_default_member_owned_channel_with_video_with_storage_buckets(
 
     set_default_nft_limits();
 
-    CreateVideoFixture::default()
+    let _ = CreateVideoFixture::default()
         .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
         .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
         .with_data_object_state_bloat_bond(state_bloat_bond)
@@ -4902,7 +4908,7 @@ pub fn create_default_curator_owned_channel_with_video(
     permissions: &[ChannelActionPermission],
 ) {
     create_default_curator_owned_channel(state_bloat_bond, &permissions);
-    CreateVideoFixture::default()
+    let _ = CreateVideoFixture::default()
         .with_sender(LEAD_ACCOUNT_ID)
         .with_actor(ContentActor::Lead)
         .with_assets(StorageAssets::<Test> {

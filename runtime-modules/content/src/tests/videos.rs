@@ -426,7 +426,10 @@ fn unsuccessful_video_creation_due_to_bucket_having_insufficient_objects_size_le
             })
             .call();
 
-        assert_err!(result ,storage::Error::<Test>::StorageBucketObjectSizeLimitReached);
+        assert_err!(
+            result,
+            storage::Error::<Test>::StorageBucketObjectSizeLimitReached
+        );
     })
 }
 
@@ -471,7 +474,10 @@ fn unsuccessful_video_creation_due_to_bucket_having_insufficient_objects_number_
             })
             .call();
 
-        assert_err!(result, storage::Error::<Test>::StorageBucketObjectNumberLimitReached);
+        assert_err!(
+            result,
+            storage::Error::<Test>::StorageBucketObjectNumberLimitReached
+        );
     })
 }
 
@@ -491,7 +497,7 @@ fn unsuccessful_video_creation_with_max_object_size_limits_exceeded() {
                 }],
             })
             .call();
-            assert_err!(result , storage::Error::<Test>::MaxDataObjectSizeExceeded);
+        assert_err!(result, storage::Error::<Test>::MaxDataObjectSizeExceeded);
     })
 }
 
@@ -853,7 +859,7 @@ fn unsuccessful_video_update_with_invalid_expected_data_size_fee() {
             })
             .call();
 
-            assert_err!(result, storage::Error::<Test>::DataSizeFeeChanged);
+        assert_err!(result, storage::Error::<Test>::DataSizeFeeChanged);
     })
 }
 
@@ -881,7 +887,7 @@ fn unsuccessful_video_update_with_insufficient_balance() {
             })
             .call();
 
-            assert_err!(result ,storage::Error::<Test>::InsufficientBalance);
+        assert_err!(result, storage::Error::<Test>::InsufficientBalance);
     })
 }
 
@@ -900,7 +906,10 @@ fn unsuccessful_video_update_due_to_bucket_having_insufficient_objects_size_left
             })
             .call();
 
-        assert_err!(result, storage::Error::<Test>::StorageBucketObjectSizeLimitReached);
+        assert_err!(
+            result,
+            storage::Error::<Test>::StorageBucketObjectSizeLimitReached
+        );
     })
 }
 
@@ -928,9 +937,13 @@ fn unsuccessful_video_update_due_to_bucket_having_insufficient_objects_number_le
                         ipfs_content_id: vec![1u8],
                     })
                     .collect(),
-            }).call();
+            })
+            .call();
 
-        assert_err!(result, storage::Error::<Test>::StorageBucketObjectNumberLimitReached);
+        assert_err!(
+            result,
+            storage::Error::<Test>::StorageBucketObjectNumberLimitReached
+        );
     })
 }
 
@@ -946,9 +959,10 @@ fn unsuccessful_video_update_with_max_object_size_limits_exceeded() {
                     size: <Test as storage::Config>::MaxDataObjectSize::get() + 1,
                     ipfs_content_id: vec![1u8],
                 }],
-            }).call();
+            })
+            .call();
 
-            assert_err!(result, storage::Error::<Test>::MaxDataObjectSizeExceeded);
+        assert_err!(result, storage::Error::<Test>::MaxDataObjectSizeExceeded);
     })
 }
 
