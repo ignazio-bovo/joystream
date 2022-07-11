@@ -2632,9 +2632,9 @@ declare module '@polkadot/api-base/types/errors' {
        **/
       EmptyContentId: AugmentedError<ApiType>;
       /**
-       * Insufficient balance for an operation.
+       * Insufficient balance for an upload.
        **/
-      InsufficientBalance: AugmentedError<ApiType>;
+      InsufficientBalanceForUploading: AugmentedError<ApiType>;
       /**
        * Insufficient module treasury balance for an operation.
        **/
