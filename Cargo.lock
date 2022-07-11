@@ -4419,6 +4419,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sp-storage",
  "strum 0.19.5",
  "strum_macros 0.19.4",
 ]

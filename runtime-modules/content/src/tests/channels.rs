@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use strum::IntoEnumIterator;
+use frame_support::assert_err;
 
 use super::curators;
 use super::fixtures::*;
@@ -261,7 +262,8 @@ fn unsuccessful_channel_creation_with_data_limits_exceeded() {
         create_initial_storage_buckets_helper();
         increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
         set_dynamic_bag_creation_policy_for_storage_numbers(1);
-        CreateChannelFixture::default()
+
+        let result = CreateChannelFixture::default()
             .with_default_storage_buckets()
             .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
             .with_channel_owner(ChannelOwner::Member(DEFAULT_MEMBER_ID))
@@ -273,7 +275,9 @@ fn unsuccessful_channel_creation_with_data_limits_exceeded() {
                 }],
             })
             .with_default_storage_buckets()
-            .call_and_assert(Err(storage::Error::<Test>::MaxDataObjectSizeExceeded.into()));
+            .call();
+
+        assert_err!(result, storage::Error::<Test>::MaxDataObjectSizeExceeded);
     })
 }
 

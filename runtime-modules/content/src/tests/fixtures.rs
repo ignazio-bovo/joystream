@@ -8,7 +8,7 @@ use super::mock::*;
 use crate::*;
 use common::council::CouncilBudgetManager;
 use frame_support::traits::Currency;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable};
 use frame_system::RawOrigin;
 use project_token::types::TransferPolicyParamsOf;
 use project_token::types::{
@@ -276,6 +276,20 @@ impl CreateChannelFixture {
             assert!(!ChannelById::<Test>::contains_key(&channel_id));
             assert_eq!(NextChannelId::<Test>::get(), channel_id);
         }
+    }
+
+    pub fn call(self) -> DispatchResult {
+        let state_pre = sp_io::storage::root(sp_storage::StateVersion::V1);
+        let result = super::mock::Call::Content(crate::Call::<Test>::create_channel {
+            channel_owner: self.channel_owner,
+            params: self.params,
+        })
+        .dispatch(Origin::signed(self.sender));
+        if result.is_err() {
+            let state_post = sp_io::storage::root(sp_storage::StateVersion::V1);
+            assert_eq!(state_pre, state_post, "State has changed");
+        }
+        result.map(|_| ()).map_err(|e| e.error)
     }
 }
 
