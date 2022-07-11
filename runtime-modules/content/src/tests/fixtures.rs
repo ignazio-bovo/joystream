@@ -1159,6 +1159,7 @@ impl DeleteChannelFixture {
     pub fn with_channel_id(self, channel_id: ChannelId) -> Self {
         Self { channel_id, ..self }
     }
+
 }
 
 impl ChannelDeletion for DeleteChannelFixture {
@@ -1176,12 +1177,18 @@ impl ChannelDeletion for DeleteChannelFixture {
     }
 
     fn execute_call(&self) -> DispatchResult {
-        Content::delete_channel(
-            Origin::signed(self.sender.clone()),
-            self.actor.clone(),
-            self.channel_id,
-            self.num_objects_to_delete,
-        )
+        let state_pre = sp_io::storage::root(sp_storage::StateVersion::V1);
+        let result = super::mock::Call::Content(crate::Call::<Test>::delete_channel {
+            actor: self.actor.clone(),
+            channel_id: self.channel_id,
+            num_objects_to_delete: self.num_objects_to_delete,
+        })
+        .dispatch(Origin::signed(self.sender));
+        if result.is_err() {
+            let state_post = sp_io::storage::root(sp_storage::StateVersion::V1);
+            assert_eq!(state_pre, state_post, "State has changed");
+        }
+        result.map(|_| ()).map_err(|e| e.error)
     }
 
     fn expected_event_on_success(&self) -> MetaEvent {
@@ -1242,13 +1249,20 @@ impl ChannelDeletion for DeleteChannelAsModeratorFixture {
     }
 
     fn execute_call(&self) -> DispatchResult {
-        Content::delete_channel_as_moderator(
-            Origin::signed(self.sender.clone()),
-            self.actor.clone(),
-            self.channel_id,
-            self.num_objects_to_delete,
-            self.rationale.clone(),
-        )
+        let state_pre = sp_io::storage::root(sp_storage::StateVersion::V1);
+        let result = super::mock::Call::Content(crate::Call::<Test>::delete_channel_as_moderator {
+            actor: self.actor.clone(),
+            channel_id: self.channel_id,
+            num_objects_to_delete: self.num_objects_to_delete,
+            rationale: self.rationale.clone(),
+        })
+        .dispatch(Origin::signed(self.sender));
+
+        if result.is_err() {
+            let state_post = sp_io::storage::root(sp_storage::StateVersion::V1);
+            assert_eq!(state_pre, state_post, "State has changed");
+        }
+        result.map(|_| ()).map_err(|e| e.error)
     }
 
     fn expected_event_on_success(&self) -> MetaEvent {
@@ -1679,12 +1693,19 @@ impl VideoDeletion for DeleteVideoFixture {
     }
 
     fn execute_call(&self) -> DispatchResult {
-        Content::delete_video(
-            Origin::signed(self.sender.clone()),
-            self.actor.clone(),
-            self.video_id,
-            self.num_objects_to_delete,
-        )
+        let state_pre = sp_io::storage::root(sp_storage::StateVersion::V1);
+        let result = super::mock::Call::Content(crate::Call::<Test>::delete_video {
+            actor: self.actor.clone(),
+            video_id: self.video_id,
+            num_objects_to_delete: self.num_objects_to_delete,
+        })
+        .dispatch(Origin::signed(self.sender));
+        if result.is_err() {
+            let state_post = sp_io::storage::root(sp_storage::StateVersion::V1);
+            assert_eq!(state_pre, state_post, "State has changed");
+        }
+
+        result.map(|_| ()).map_err(|e| e.error)
     }
 
     fn expected_event_on_success(&self) -> MetaEvent {
