@@ -1,9 +1,9 @@
 #![cfg(test)]
 
+use frame_support::assert_err;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use strum::IntoEnumIterator;
-use frame_support::assert_err;
 
 use super::curators;
 use super::fixtures::*;
@@ -161,7 +161,8 @@ fn unsuccessful_channel_creation_with_invalid_expected_data_size_fee() {
         create_initial_storage_buckets_helper();
         increase_account_balance_helper(LEAD_ACCOUNT_ID, INITIAL_BALANCE);
         let default_curator_group_id = curators::create_curator_group(BTreeMap::new());
-        CreateChannelFixture::default()
+
+        let result = CreateChannelFixture::default()
             .with_default_storage_buckets()
             .with_sender(LEAD_ACCOUNT_ID)
             .with_channel_owner(ChannelOwner::CuratorGroup(default_curator_group_id))
@@ -170,7 +171,9 @@ fn unsuccessful_channel_creation_with_invalid_expected_data_size_fee() {
                 expected_data_size_fee: BalanceOf::<Test>::from(1_000_000u64),
                 object_creation_list: create_data_objects_helper(),
             })
-            .call_and_assert(Err(storage::Error::<Test>::DataSizeFeeChanged.into()));
+            .call();
+
+        assert_err!(result, storage::Error::<Test>::DataSizeFeeChanged);
     })
 }
 
@@ -206,7 +209,7 @@ fn unsuccessful_channel_creation_with_no_bucket_with_sufficient_size_available()
         increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
         set_dynamic_bag_creation_policy_for_storage_numbers(1);
 
-        CreateChannelFixture::default()
+        let result = CreateChannelFixture::default()
             .with_default_storage_buckets()
             .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
             .with_channel_owner(ChannelOwner::Member(DEFAULT_MEMBER_ID))
@@ -218,9 +221,12 @@ fn unsuccessful_channel_creation_with_no_bucket_with_sufficient_size_available()
                 }],
             })
             .with_default_storage_buckets()
-            .call_and_assert(Err(
-                storage::Error::<Test>::StorageBucketIdCollectionsAreEmpty.into(),
-            ));
+            .call();
+
+        assert_err!(
+            result,
+            storage::Error::<Test>::StorageBucketIdCollectionsAreEmpty
+        );
     })
 }
 
@@ -251,7 +257,10 @@ fn unsuccessful_channel_creation_with_no_bucket_with_sufficient_number_available
             .with_default_storage_buckets()
             .call();
 
-            assert_err!(result, storage::Error::<Test>::StorageBucketIdCollectionsAreEmpty);
+        assert_err!(
+            result,
+            storage::Error::<Test>::StorageBucketIdCollectionsAreEmpty
+        );
     })
 }
 
@@ -379,13 +388,9 @@ fn unsuccessful_channel_update_with_pending_status_transfer() {
 #[test]
 fn unsuccessful_channel_update_with_data_limits_exceeded() {
     with_default_mock_builder(|| {
-        run_to_block(1);
+        ContentTest::with_member_channel().setup();
 
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-        create_default_member_owned_channel();
-
-        UpdateChannelFixture::default()
+        let result = UpdateChannelFixture::default()
             .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
             .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
             .with_assets_to_upload(StorageAssets::<Test> {
@@ -395,18 +400,16 @@ fn unsuccessful_channel_update_with_data_limits_exceeded() {
                     ipfs_content_id: vec![1u8],
                 }],
             })
-            .call_and_assert(Err(storage::Error::<Test>::MaxDataObjectSizeExceeded.into()));
+            .call();
+
+        assert_err!(result, storage::Error::<Test>::MaxDataObjectSizeExceeded);
     })
 }
 
 #[test]
 fn unsuccessful_channel_update_with_invalid_objects_id_to_remove() {
     with_default_mock_builder(|| {
-        run_to_block(1);
-
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-        create_default_member_owned_channel_with_video();
+        ContentTest::default().with_video().setup();
 
         UpdateChannelFixture::default()
             .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
@@ -444,62 +447,47 @@ fn unsuccessful_channel_update_with_invalid_collaborators_set() {
 #[test]
 fn unsuccessful_channel_update_with_invalid_expected_data_size_fee() {
     with_default_mock_builder(|| {
-        run_to_block(1);
+        ContentTest::with_member_channel().setup();
 
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-        create_default_member_owned_channel();
-
-        UpdateChannelFixture::default()
-            .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
-            .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
+        let result = UpdateChannelFixture::default()
             .with_assets_to_upload(StorageAssets::<Test> {
                 // setting a purposely high fee to trigger error
                 expected_data_size_fee: BalanceOf::<Test>::from(1_000_000u64),
                 object_creation_list: create_data_objects_helper(),
             })
-            .call_and_assert(Err(storage::Error::<Test>::DataSizeFeeChanged.into()));
+            .call();
+
+        assert_err!(result, storage::Error::<Test>::DataSizeFeeChanged);
     })
 }
 
 #[test]
 fn unsuccessful_channel_update_with_insufficient_balance() {
     with_default_mock_builder(|| {
-        run_to_block(1);
-
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-        create_default_member_owned_channel();
+        ContentTest::with_member_channel().setup();
         slash_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID);
 
         let data_object_state_bloat_bond = 10;
         set_data_object_state_bloat_bond(data_object_state_bloat_bond);
 
-        UpdateChannelFixture::default()
-            .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
+        let result = UpdateChannelFixture::default()
             .with_data_object_state_bloat_bond(data_object_state_bloat_bond)
-            .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
             .with_assets_to_upload(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: create_data_objects_helper(),
             })
-            .call_and_assert(Err(storage::Error::<Test>::InsufficientBalance.into()));
+            .call();
+
+        assert_err!(result, storage::Error::<Test>::InsufficientBalance);
     })
 }
 
 #[test]
 fn unsuccessful_channel_update_with_no_bucket_with_sufficient_object_size_limit() {
     with_default_mock_builder(|| {
-        run_to_block(1);
+        ContentTest::with_member_channel().setup();
 
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-
-        create_default_member_owned_channel();
-
-        UpdateChannelFixture::default()
-            .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
-            .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
+        let result = UpdateChannelFixture::default()
             .with_assets_to_upload(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: vec![DataObjectCreationParameters {
@@ -507,9 +495,12 @@ fn unsuccessful_channel_update_with_no_bucket_with_sufficient_object_size_limit(
                     ipfs_content_id: vec![1u8],
                 }],
             })
-            .call_and_assert(Err(
-                storage::Error::<Test>::StorageBucketObjectSizeLimitReached.into(),
-            ));
+            .call();
+
+        assert_err!(
+            result,
+            storage::Error::<Test>::StorageBucketObjectSizeLimitReached
+        );
     })
 }
 
@@ -528,9 +519,7 @@ fn unsuccessful_channel_update_with_no_bucket_with_sufficient_object_number_limi
 
         create_default_member_owned_channel();
 
-        UpdateChannelFixture::default()
-            .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
-            .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
+        let result = UpdateChannelFixture::default()
             .with_assets_to_upload(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: (0..(STORAGE_BUCKET_OBJECTS_NUMBER_LIMIT + 1))
@@ -540,9 +529,12 @@ fn unsuccessful_channel_update_with_no_bucket_with_sufficient_object_number_limi
                     })
                     .collect(),
             })
-            .call_and_assert(Err(
-                storage::Error::<Test>::StorageBucketObjectNumberLimitReached.into(),
-            ));
+            .call();
+
+        assert_err!(
+            result,
+            storage::Error::<Test>::StorageBucketObjectNumberLimitReached
+        );
     })
 }
 
