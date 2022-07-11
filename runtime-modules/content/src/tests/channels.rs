@@ -235,7 +235,7 @@ fn unsuccessful_channel_creation_with_no_bucket_with_sufficient_number_available
         );
 
         set_dynamic_bag_creation_policy_for_storage_numbers(1);
-        CreateChannelFixture::default()
+        let result = CreateChannelFixture::default()
             .with_default_storage_buckets()
             .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
             .with_channel_owner(ChannelOwner::Member(DEFAULT_MEMBER_ID))
@@ -249,9 +249,9 @@ fn unsuccessful_channel_creation_with_no_bucket_with_sufficient_number_available
                     .collect(),
             })
             .with_default_storage_buckets()
-            .call_and_assert(Err(
-                storage::Error::<Test>::StorageBucketIdCollectionsAreEmpty.into(),
-            ));
+            .call();
+
+            assert_err!(result, storage::Error::<Test>::StorageBucketIdCollectionsAreEmpty);
     })
 }
 

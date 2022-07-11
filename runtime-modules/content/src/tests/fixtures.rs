@@ -679,6 +679,22 @@ impl UpdateChannelFixture {
             }
         }
     }
+
+    pub fn call(self) -> DispatchResult {
+        let state_pre = sp_io::storage::root(sp_storage::StateVersion::V1);
+        let result = super::mock::Call::Content(crate::Call::<Test>::update_channel {
+            actor: self.actor.clone(),
+            channel_id: self.channel_id,
+            params: self.params.clone(),
+        })
+            .dispatch(Origin::signed(self.sender));
+        if result.is_err() {
+            let state_post = sp_io::storage::root(sp_storage::StateVersion::V1);
+            assert_eq!(state_pre, state_post, "State has changed");
+        }
+        result.map(|_| ()).map_err(|e| e.error)
+    }
+
 }
 
 pub struct UpdateChannelPrivilegeLevelFixture {
