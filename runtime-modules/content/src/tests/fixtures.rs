@@ -400,16 +400,6 @@ impl CreateVideoFixture {
         Balances::<Test>::usable_balance(&self.sender)
     }
 
-    pub fn call(self) {
-        let origin = Origin::signed(self.sender.clone());
-        assert_ok!(Content::create_video(
-            origin,
-            self.actor.clone(),
-            self.channel_id,
-            self.params.clone(),
-        ));
-    }
-
     pub fn call_and_assert(&self, expected_result: DispatchResult) {
         let origin = Origin::signed(self.sender.clone());
         let balance_pre = self.get_balance();
@@ -479,6 +469,21 @@ impl CreateVideoFixture {
                 }));
             }
         }
+    }
+
+    pub fn call(self) -> DispatchResult {
+        let state_pre = sp_io::storage::root(sp_storage::StateVersion::V1);
+        let result = super::mock::Call::Content(crate::Call::<Test>::create_video {
+            actor: self.actor,
+            channel_id: self.channel_id,
+            params: self.params,
+        })
+        .dispatch(Origin::signed(self.sender));
+        if result.is_err() {
+            let state_post = sp_io::storage::root(sp_storage::StateVersion::V1);
+            assert_eq!(state_pre, state_post, "State has changed");
+        }
+        result.map(|_| ()).map_err(|e| e.error)
     }
 }
 
@@ -925,6 +930,21 @@ impl UpdateVideoFixture {
                 }
             }
         }
+    }
+
+    pub fn call(self) -> DispatchResult {
+        let state_pre = sp_io::storage::root(sp_storage::StateVersion::V1);
+        let result = super::mock::Call::Content(crate::Call::<Test>::update_video {
+            actor: self.actor,
+            video_id: self.video_id,
+            params: self.params,
+        })
+        .dispatch(Origin::signed(self.sender));
+        if result.is_err() {
+            let state_post = sp_io::storage::root(sp_storage::StateVersion::V1);
+            assert_eq!(state_pre, state_post, "State has changed");
+        }
+        result.map(|_| ()).map_err(|e| e.error)
     }
 }
 

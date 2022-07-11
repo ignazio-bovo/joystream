@@ -366,21 +366,17 @@ fn unsuccessful_video_creation_with_invalid_channel_id() {
 #[test]
 fn unsuccessful_video_creation_with_invalid_expected_data_size_fee() {
     with_default_mock_builder(|| {
-        run_to_block(1);
+        ContentTest::with_member_channel().setup();
 
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-        create_default_member_owned_channel();
-
-        CreateVideoFixture::default()
-            .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
-            .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
+        let result = CreateVideoFixture::default()
             .with_assets(StorageAssets::<Test> {
                 // setting a purposely high fee to trigger error
                 expected_data_size_fee: BalanceOf::<Test>::from(1_000_000u64),
                 object_creation_list: create_data_objects_helper(),
             })
-            .call_and_assert(Err(storage::Error::<Test>::DataSizeFeeChanged.into()));
+            .call();
+
+        assert_err!(result, storage::Error::<Test>::DataSizeFeeChanged);
     })
 }
 
@@ -418,16 +414,9 @@ fn unsuccessful_video_creation_with_insufficient_balance() {
 #[test]
 fn unsuccessful_video_creation_due_to_bucket_having_insufficient_objects_size_left() {
     with_default_mock_builder(|| {
-        run_to_block(1);
+        ContentTest::with_member_channel().setup();
 
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-
-        create_default_member_owned_channel();
-
-        CreateVideoFixture::default()
-            .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
-            .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
+        let result = CreateVideoFixture::default()
             .with_assets(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: vec![DataObjectCreationParameters {
@@ -435,9 +424,9 @@ fn unsuccessful_video_creation_due_to_bucket_having_insufficient_objects_size_le
                     ipfs_content_id: vec![1u8],
                 }],
             })
-            .call_and_assert(Err(
-                storage::Error::<Test>::StorageBucketObjectSizeLimitReached.into(),
-            ));
+            .call();
+
+        assert_err!(result ,storage::Error::<Test>::StorageBucketObjectSizeLimitReached);
     })
 }
 
@@ -468,7 +457,7 @@ fn unsuccessful_video_creation_due_to_bucket_having_insufficient_objects_number_
 
         create_default_member_owned_channel();
 
-        CreateVideoFixture::default()
+        let result = CreateVideoFixture::default()
             .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
             .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
             .with_assets(StorageAssets::<Test> {
@@ -480,22 +469,18 @@ fn unsuccessful_video_creation_due_to_bucket_having_insufficient_objects_number_
                     })
                     .collect(),
             })
-            .call_and_assert(Err(
-                storage::Error::<Test>::StorageBucketObjectNumberLimitReached.into(),
-            ));
+            .call();
+
+        assert_err!(result, storage::Error::<Test>::StorageBucketObjectNumberLimitReached);
     })
 }
 
 #[test]
 fn unsuccessful_video_creation_with_max_object_size_limits_exceeded() {
     with_default_mock_builder(|| {
-        run_to_block(1);
+        ContentTest::with_member_channel().setup();
 
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-        create_default_member_owned_channel();
-
-        CreateVideoFixture::default()
+        let result = CreateVideoFixture::default()
             .with_sender(DEFAULT_MEMBER_ACCOUNT_ID)
             .with_actor(ContentActor::Member(DEFAULT_MEMBER_ID))
             .with_assets(StorageAssets::<Test> {
@@ -505,7 +490,8 @@ fn unsuccessful_video_creation_with_max_object_size_limits_exceeded() {
                     ipfs_content_id: vec![1u8],
                 }],
             })
-            .call_and_assert(Err(storage::Error::<Test>::MaxDataObjectSizeExceeded.into()));
+            .call();
+            assert_err!(result , storage::Error::<Test>::MaxDataObjectSizeExceeded);
     })
 }
 
@@ -857,19 +843,17 @@ fn unsuccessful_video_update_with_unauth_curator() {
 #[test]
 fn unsuccessful_video_update_with_invalid_expected_data_size_fee() {
     with_default_mock_builder(|| {
-        run_to_block(1);
+        ContentTest::default().with_video().setup();
 
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-        create_default_member_owned_channel_with_video();
-
-        UpdateVideoFixture::default()
+        let result = UpdateVideoFixture::default()
             .with_assets_to_upload(StorageAssets::<Test> {
                 // setting a purposely high fee to trigger error
                 expected_data_size_fee: BalanceOf::<Test>::from(1_000_000u64),
                 object_creation_list: create_data_objects_helper(),
             })
-            .call_and_assert(Err(storage::Error::<Test>::DataSizeFeeChanged.into()));
+            .call();
+
+            assert_err!(result, storage::Error::<Test>::DataSizeFeeChanged);
     })
 }
 
@@ -889,27 +873,24 @@ fn unsuccessful_video_update_with_insufficient_balance() {
         );
         slash_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID);
 
-        UpdateVideoFixture::default()
+        let result = UpdateVideoFixture::default()
             .with_data_object_state_bloat_bond(data_object_state_bloat_bond)
             .with_assets_to_upload(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: create_data_objects_helper(),
             })
-            .call_and_assert(Err(storage::Error::<Test>::InsufficientBalance.into()));
+            .call();
+
+            assert_err!(result ,storage::Error::<Test>::InsufficientBalance);
     })
 }
 
 #[test]
 fn unsuccessful_video_update_due_to_bucket_having_insufficient_objects_size_left() {
     with_default_mock_builder(|| {
-        run_to_block(1);
+        ContentTest::default().with_video().setup();
 
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-
-        create_default_member_owned_channel_with_video();
-
-        UpdateVideoFixture::default()
+        let result = UpdateVideoFixture::default()
             .with_assets_to_upload(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: vec![DataObjectCreationParameters {
@@ -917,9 +898,9 @@ fn unsuccessful_video_update_due_to_bucket_having_insufficient_objects_size_left
                     ipfs_content_id: vec![1u8],
                 }],
             })
-            .call_and_assert(Err(
-                storage::Error::<Test>::StorageBucketObjectSizeLimitReached.into(),
-            ));
+            .call();
+
+        assert_err!(result, storage::Error::<Test>::StorageBucketObjectSizeLimitReached);
     })
 }
 
@@ -938,7 +919,7 @@ fn unsuccessful_video_update_due_to_bucket_having_insufficient_objects_number_le
 
         create_default_member_owned_channel_with_video();
 
-        UpdateVideoFixture::default()
+        let result = UpdateVideoFixture::default()
             .with_assets_to_upload(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: (0..(STORAGE_BUCKET_OBJECTS_NUMBER_LIMIT + 1))
@@ -947,31 +928,27 @@ fn unsuccessful_video_update_due_to_bucket_having_insufficient_objects_number_le
                         ipfs_content_id: vec![1u8],
                     })
                     .collect(),
-            })
-            .call_and_assert(Err(
-                storage::Error::<Test>::StorageBucketObjectNumberLimitReached.into(),
-            ));
+            }).call();
+
+        assert_err!(result, storage::Error::<Test>::StorageBucketObjectNumberLimitReached);
     })
 }
 
 #[test]
 fn unsuccessful_video_update_with_max_object_size_limits_exceeded() {
     with_default_mock_builder(|| {
-        run_to_block(1);
+        ContentTest::default().with_video().setup();
 
-        create_initial_storage_buckets_helper();
-        increase_account_balance_helper(DEFAULT_MEMBER_ACCOUNT_ID, INITIAL_BALANCE);
-        create_default_member_owned_channel_with_video();
-
-        UpdateVideoFixture::default()
+        let result = UpdateVideoFixture::default()
             .with_assets_to_upload(StorageAssets::<Test> {
                 expected_data_size_fee: Storage::<Test>::data_object_per_mega_byte_fee(),
                 object_creation_list: vec![DataObjectCreationParameters {
                     size: <Test as storage::Config>::MaxDataObjectSize::get() + 1,
                     ipfs_content_id: vec![1u8],
                 }],
-            })
-            .call_and_assert(Err(storage::Error::<Test>::MaxDataObjectSizeExceeded.into()));
+            }).call();
+
+            assert_err!(result, storage::Error::<Test>::MaxDataObjectSizeExceeded);
     })
 }
 
