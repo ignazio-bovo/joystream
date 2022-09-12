@@ -278,7 +278,7 @@ fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> 
                 .map_err(|err| err.to_string())?,
         );
 
-        let (_, _, grandpa, babe, im_online, authority_discovery) =
+        let (_, _, grandpa, babe) =
             chain_spec::authority_keys_from_seed(seed);
 
         let insert_key = |key_type, public| {
@@ -289,13 +289,6 @@ fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> 
         insert_key(sp_core::crypto::key_types::BABE, babe.as_slice())?;
 
         insert_key(sp_core::crypto::key_types::GRANDPA, grandpa.as_slice())?;
-
-        insert_key(sp_core::crypto::key_types::IM_ONLINE, im_online.as_slice())?;
-
-        insert_key(
-            sp_core::crypto::key_types::AUTHORITY_DISCOVERY,
-            authority_discovery.as_slice(),
-        )?;
     }
 
     Ok(())
