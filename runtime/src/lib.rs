@@ -61,11 +61,9 @@ use frame_support::{construct_runtime, parameter_types, PalletId};
 use frame_system::limits::{BlockLength, BlockWeights};
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
-use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_session::historical as pallet_session_historical;
 use pallet_staking::BondingRestriction;
 use pallet_transaction_payment::CurrencyAdapter;
-use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_core::crypto::KeyTypeId;
 use sp_core::Hasher;
 
@@ -220,7 +218,6 @@ fn filter_stage_1(call: &<Runtime as frame_system::Config>::Call) -> bool {
         Call::Staking(_) => true,
         Call::Session(_) => true,
         Call::Grandpa(_) => true,
-        Call::ImOnline(_) => true,
         Call::Sudo(_) => true,
         Call::BagsList(_) => true,
         // Disable all other calls
@@ -491,15 +488,13 @@ impl pallet_authorship::Config for Runtime {
     type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Babe>;
     type UncleGenerations = UncleGenerations;
     type FilterUncle = ();
-    type EventHandler = (Staking, ImOnline);
+    type EventHandler = ();
 }
 
 impl_opaque_keys! {
     pub struct SessionKeys {
         pub grandpa: Grandpa,
         pub babe: Babe,
-        pub im_online: ImOnline,
-        pub authority_discovery: AuthorityDiscovery,
     }
 }
 
@@ -725,30 +720,12 @@ impl pallet_bags_list::Config for Runtime {
 }
 
 parameter_types! {
-    pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
     /// We prioritize im-online heartbeats over election solution submission.
     pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
     pub const MaxAuthorities: u32 = 100;
     pub const MaxKeys: u32 = 10_000;
     pub const MaxPeerInHeartbeats: u32 = 10_000;
     pub const MaxPeerDataEncodingSize: u32 = 1_000;
-}
-
-impl pallet_im_online::Config for Runtime {
-    type AuthorityId = ImOnlineId;
-    type Event = Event;
-    type NextSessionRotation = Babe;
-    type ValidatorSet = Historical;
-    type ReportUnresponsiveness = ();
-    type UnsignedPriority = ImOnlineUnsignedPriority;
-    type WeightInfo = weights::pallet_im_online::SubstrateWeight<Runtime>;
-    type MaxKeys = MaxKeys;
-    type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
-    type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
-}
-
-impl pallet_authority_discovery::Config for Runtime {
-    type MaxAuthorities = MaxAuthorities;
 }
 
 parameter_types! {
@@ -1541,9 +1518,6 @@ construct_runtime!(
         Session: pallet_session,
         Historical: pallet_session_historical,
         Grandpa: pallet_grandpa,
-        AuthorityDiscovery: pallet_authority_discovery,
-        ImOnline: pallet_im_online,
-//        Offences: pallet_offences,
         RandomnessCollectiveFlip: pallet_randomness_collective_flip,
         Sudo: pallet_sudo,
         BagsList: pallet_bags_list,

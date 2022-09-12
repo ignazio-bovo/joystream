@@ -29,18 +29,16 @@ use grandpa_primitives::AuthorityId as GrandpaId;
 
 use node_runtime::{
     constants::currency::{ENDOWMENT, MIN_NOMINATOR_BOND, MIN_VALIDATOR_BOND, STASH},
-    wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, Block, ContentConfig,
-    GrandpaConfig, ImOnlineConfig, MaxNominations, SessionConfig, SessionKeys, StakerStatus,
+    wasm_binary_unwrap, BabeConfig, BalancesConfig, Block, ContentConfig,
+    GrandpaConfig, MaxNominations, SessionConfig, SessionKeys, StakerStatus,
     StakingConfig, StorageConfig, SudoConfig, SystemConfig, TransactionPaymentConfig,
     VestingConfig,
 };
-use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sc_chain_spec::ChainSpecExtension;
 use sc_service::ChainType;
 
 use serde::{Deserialize, Serialize};
 use serde_json as json;
-use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_babe::AuthorityId as BabeId;
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::{
@@ -75,14 +73,10 @@ pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig, Extensions>;
 fn session_keys(
     grandpa: GrandpaId,
     babe: BabeId,
-    im_online: ImOnlineId,
-    authority_discovery: AuthorityDiscoveryId,
 ) -> SessionKeys {
     SessionKeys {
         grandpa,
         babe,
-        im_online,
-        authority_discovery,
     }
 }
 
@@ -109,16 +103,12 @@ pub fn authority_keys_from_seed(
     AccountId,
     GrandpaId,
     BabeId,
-    ImOnlineId,
-    AuthorityDiscoveryId,
 ) {
     (
         get_account_id_from_seed::<sr25519::Public>(&format!("{}//stash", seed)),
         get_account_id_from_seed::<sr25519::Public>(seed),
         get_from_seed::<GrandpaId>(seed),
         get_from_seed::<BabeId>(seed),
-        get_from_seed::<ImOnlineId>(seed),
-        get_from_seed::<AuthorityDiscoveryId>(seed),
     )
 }
 
@@ -165,8 +155,6 @@ pub fn testnet_genesis(
         AccountId,
         GrandpaId,
         BabeId,
-        ImOnlineId,
-        AuthorityDiscoveryId,
     )>,
     initial_nominators: Vec<AccountId>,
     root_key: AccountId,
@@ -248,7 +236,7 @@ pub fn testnet_genesis(
                     (
                         x.0.clone(),
                         x.0.clone(),
-                        session_keys(x.2.clone(), x.3.clone(), x.4.clone(), x.5.clone()),
+                        session_keys(x.2.clone(), x.3.clone()),
                     )
                 })
                 .collect::<Vec<_>>(),
@@ -270,8 +258,6 @@ pub fn testnet_genesis(
             authorities: vec![],
             epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),
         },
-        im_online: ImOnlineConfig { keys: vec![] },
-        authority_discovery: AuthorityDiscoveryConfig { keys: vec![] },
         grandpa: GrandpaConfig {
             authorities: vec![],
         },

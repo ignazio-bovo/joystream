@@ -12,7 +12,7 @@ use sp_runtime::{generic, ApplyExtrinsicResult};
 use sp_std::vec::Vec;
 
 use crate::{
-    AccountId, AllPalletsWithSystem, AuthorityDiscovery, AuthorityDiscoveryId, Babe, Balance,
+    AccountId, AllPalletsWithSystem, Babe, Balance,
     BlockNumber, Call, EpochDuration, Grandpa, GrandpaAuthorityList, GrandpaId, Historical, Index,
     InherentDataExt, ProposalsEngine, Runtime, RuntimeVersion, SessionKeys, Signature, System,
     TransactionPayment, BABE_GENESIS_EPOCH_CONFIG, VERSION,
@@ -258,12 +258,6 @@ impl_runtime_apis! {
                 equivocation_proof,
                 key_owner_proof,
             )
-        }
-    }
-
-    impl sp_authority_discovery::AuthorityDiscoveryApi<Block> for Runtime {
-        fn authorities() -> Vec<AuthorityDiscoveryId> {
-            AuthorityDiscovery::authorities()
         }
     }
 
