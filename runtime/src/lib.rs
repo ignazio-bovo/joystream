@@ -71,7 +71,6 @@ use sp_core::Hasher;
 
 use sp_runtime::{
     create_runtime_str,
-    curve::PiecewiseLinear,
     generic, impl_opaque_keys,
     traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys},
     Perbill,
@@ -332,7 +331,7 @@ parameter_types! {
 impl pallet_babe::Config for Runtime {
     type EpochDuration = EpochDuration;
     type ExpectedBlockTime = ExpectedBlockTime;
-    type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+    type EpochChangeTrigger = pallet_babe::SameAuthoritiesForever;
     type DisabledValidators = Session;
 
     type KeyOwnerProofSystem = Historical;
@@ -521,22 +520,10 @@ impl pallet_session::historical::Config for Runtime {
     type FullIdentificationOf = pallet_staking::ExposureOf<Runtime>;
 }
 
-pallet_staking_reward_curve::build! {
-    const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
-        min_inflation: 0_050_000,
-        max_inflation: 0_180_000,
-        ideal_stake: 0_300_000,
-        falloff: 0_050_000,
-        max_piece_count: 100,
-        test_precision: 0_005_000,
-    );
-}
-
 parameter_types! {
     pub const SessionsPerEra: sp_staking::SessionIndex = 6;
     pub const BondingDuration: sp_staking::EraIndex = BONDING_DURATION;
     pub const SlashDeferDuration: sp_staking::EraIndex = BONDING_DURATION - 1;
-    pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
     pub const MaxNominatorRewardedPerValidator: u32 = 256;
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
     pub OffchainRepeat: BlockNumber = 5;
@@ -563,7 +550,7 @@ impl pallet_staking::Config for Runtime {
     type SlashDeferDuration = SlashDeferDuration;
     type SlashCancelOrigin = EnsureRoot<AccountId>;
     type SessionInterface = Self;
-    type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
+    type EraPayout = ();
     type NextNewSession = Session;
     type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
