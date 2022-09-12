@@ -52,7 +52,6 @@ pallet-transaction-payment = { package = 'pallet-transaction-payment', default-f
 pallet-transaction-payment-rpc-runtime-api = { package = 'pallet-transaction-payment-rpc-runtime-api', default-features = false, git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe'}
 pallet-authorship = { package = 'pallet-authorship', default-features = false, git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe'}
 pallet-session = { package = 'pallet-session', features = [ "historical" ], default-features = false, git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe'}
-pallet-offences = { package = 'pallet-offences', default-features = false, git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe'}
 pallet-randomness-collective-flip = { package = 'pallet-randomness-collective-flip', default-features = false, git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe'}
 pallet-authority-discovery = { package = 'pallet-authority-discovery', default-features = false, git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe'}
 pallet-sudo = { package = 'pallet-sudo', default-features = false, git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe'}
@@ -67,7 +66,6 @@ pallet-multisig = { package = 'pallet-multisig', default-features = false, git =
 # Benchmarking
 frame-benchmarking = { git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe', default-features = false, optional = true }
 frame-system-benchmarking = { git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe', default-features = false, optional = true }
-pallet-offences-benchmarking = { git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe', default-features = false, optional = true }
 pallet-session-benchmarking = { git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe', default-features = false, optional = true }
 hex-literal = { optional = true, version = '0.3.1' }
 pallet-election-provider-support-benchmarking = { package = 'pallet-election-provider-support-benchmarking', default-features = false, optional = true, git = 'https://github.com/joystream/substrate.git', rev = '31f4f7654cf8e27e0d73ffeb1c11b2df2d4fbffe' }
@@ -145,7 +143,6 @@ std = [
     'pallet-staking/std',
     'pallet-sudo/std',
     'pallet-im-online/std',
-    'pallet-offences/std',
     'pallet-vesting/std',
     'pallet-multisig/std',
     'substrate-utility/std',
@@ -181,7 +178,6 @@ runtime-benchmarks = [
     "frame-system/runtime-benchmarks",
 
     # Substrate pallets
-    "pallet-offences-benchmarking",
     "pallet-vesting/runtime-benchmarks",
     "pallet-multisig/runtime-benchmarks",
     "pallet-session-benchmarking",

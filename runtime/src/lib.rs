@@ -347,7 +347,7 @@ impl pallet_babe::Config for Runtime {
     )>>::IdentificationTuple;
 
     type HandleEquivocation =
-        pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
+        pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, (), ReportLongevity>;
 
     type WeightInfo = ();
     type MaxAuthorities = MaxAuthorities;
@@ -369,7 +369,7 @@ impl pallet_grandpa::Config for Runtime {
 
     type HandleEquivocation = pallet_grandpa::EquivocationHandler<
         Self::KeyOwnerIdentification,
-        Offences,
+        (),
         ReportLongevity,
     >;
 
@@ -739,18 +739,12 @@ impl pallet_im_online::Config for Runtime {
     type Event = Event;
     type NextSessionRotation = Babe;
     type ValidatorSet = Historical;
-    type ReportUnresponsiveness = Offences;
+    type ReportUnresponsiveness = ();
     type UnsignedPriority = ImOnlineUnsignedPriority;
     type WeightInfo = weights::pallet_im_online::SubstrateWeight<Runtime>;
     type MaxKeys = MaxKeys;
     type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
     type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
-}
-
-impl pallet_offences::Config for Runtime {
-    type Event = Event;
-    type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
-    type OnOffenceHandler = Staking;
 }
 
 impl pallet_authority_discovery::Config for Runtime {
@@ -1549,7 +1543,7 @@ construct_runtime!(
         Grandpa: pallet_grandpa,
         AuthorityDiscovery: pallet_authority_discovery,
         ImOnline: pallet_im_online,
-        Offences: pallet_offences,
+//        Offences: pallet_offences,
         RandomnessCollectiveFlip: pallet_randomness_collective_flip,
         Sudo: pallet_sudo,
         BagsList: pallet_bags_list,
