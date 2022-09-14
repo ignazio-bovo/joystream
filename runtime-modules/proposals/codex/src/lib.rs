@@ -108,7 +108,7 @@ pub trait Config:
     + proposals_engine::Config
     + proposals_discussion::Config
     + common::membership::MembershipTypes
-    + staking::Config
+    //+ staking::Config
     + proposals_engine::Config
     + working_group::Config<ForumWorkingGroupInstance>
     + working_group::Config<StorageWorkingGroupInstance>
@@ -748,21 +748,22 @@ impl<T: Config> Module<T> {
                     visited_accounts.insert(account);
                 }
             }
-            ProposalDetails::SetMaxValidatorCount(ref new_validator_count) => {
-                // Since `set_validator_count` doesn't check that `new_validator_count`
-                // isn't less than `minimum_validator_count` we need to do this here.
-                // We shouldn't access the storage for creation checks but we do it here for the
-                // reasons just explained **as an exception**.
-                ensure!(
-                    *new_validator_count >= <staking::Pallet<T>>::minimum_validator_count(),
-                    Error::<T>::InvalidValidatorCount
-                );
+            // TODO: enable after enable staking
+            // ProposalDetails::SetMaxValidatorCount(ref new_validator_count) => {
+            //     // Since `set_validator_count` doesn't check that `new_validator_count`
+            //     // isn't less than `minimum_validator_count` we need to do this here.
+            //     // We shouldn't access the storage for creation checks but we do it here for the
+            //     // reasons just explained **as an exception**.
+            //     ensure!(
+            //         *new_validator_count >= <staking::Pallet<T>>::minimum_validator_count(),
+            //         Error::<T>::InvalidValidatorCount
+            //     );
 
-                ensure!(
-                    *new_validator_count <= T::SetMaxValidatorCountProposalMaxValidators::get(),
-                    Error::<T>::InvalidValidatorCount
-                );
-            }
+            //     ensure!(
+            //         *new_validator_count <= T::SetMaxValidatorCountProposalMaxValidators::get(),
+            //         Error::<T>::InvalidValidatorCount
+            //     );
+            // }
             ProposalDetails::CreateWorkingGroupLeadOpening(..) => {
                 // Note: No checks for this proposal for now
             }
@@ -846,9 +847,10 @@ impl<T: Config> Module<T> {
             ProposalDetails::Signal(..) => T::SignalProposalParameters::get(),
             ProposalDetails::RuntimeUpgrade(..) => T::RuntimeUpgradeProposalParameters::get(),
             ProposalDetails::FundingRequest(..) => T::FundingRequestProposalParameters::get(),
-            ProposalDetails::SetMaxValidatorCount(..) => {
-                T::SetMaxValidatorCountProposalParameters::get()
-            }
+            // TODO: enable after enable staking
+            // ProposalDetails::SetMaxValidatorCount(..) => {
+            //     T::SetMaxValidatorCountProposalParameters::get()
+            // }
             ProposalDetails::FillWorkingGroupLeadOpening(..) => {
                 T::FillWorkingGroupLeadOpeningProposalParameters::get()
             }
@@ -930,12 +932,13 @@ impl<T: Config> Module<T> {
                     description_length.saturated_into(),
                 )
             }
-            ProposalDetails::SetMaxValidatorCount(..) => {
-                WeightInfoCodex::<T>::create_proposal_set_max_validator_count(
-                    title_length.saturated_into(),
-                    description_length.saturated_into(),
-                )
-            }
+            // TODO: enable after enabling staking
+            // ProposalDetails::SetMaxValidatorCount(..) => {
+            //     WeightInfoCodex::<T>::create_proposal_set_max_validator_count(
+            //         title_length.saturated_into(),
+            //         description_length.saturated_into(),
+            //     )
+            // }
             ProposalDetails::CreateWorkingGroupLeadOpening(opening_params) => {
                 WeightInfoCodex::<T>::create_proposal_create_working_group_lead_opening(
                     opening_params.description.len().saturated_into(),

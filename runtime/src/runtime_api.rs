@@ -13,7 +13,7 @@ use sp_std::vec::Vec;
 
 use crate::{
     AccountId, AllPalletsWithSystem, Babe, Balance,
-    BlockNumber, Call, EpochDuration, Grandpa, GrandpaAuthorityList, GrandpaId, Historical, Index,
+    BlockNumber, Call, EpochDuration, Grandpa, GrandpaAuthorityList, GrandpaId, Index,
     InherentDataExt, ProposalsEngine, Runtime, RuntimeVersion, SessionKeys, Signature, System,
     TransactionPayment, BABE_GENESIS_EPOCH_CONFIG, VERSION,
 };
@@ -200,11 +200,11 @@ impl_runtime_apis! {
             _set_id: fg_primitives::SetId,
             authority_id: GrandpaId,
         ) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
-            use codec::Encode;
-
-            Historical::prove((fg_primitives::KEY_TYPE, authority_id))
-                .map(|p| p.encode())
-                .map(fg_primitives::OpaqueKeyOwnershipProof::new)
+            None
+            // TODO(Ignazio): review
+            // Historical::prove((fg_primitives::KEY_TYPE, authority_id))
+            //     .map(|p| p.encode())
+            //     .map(fg_primitives::OpaqueKeyOwnershipProof::new)
         }
     }
 
@@ -241,11 +241,12 @@ impl_runtime_apis! {
             _slot: sp_consensus_babe::Slot,
             authority_id: sp_consensus_babe::AuthorityId,
         ) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
-            use codec::Encode;
+            // use codec::Encode;
 
-            Historical::prove((sp_consensus_babe::KEY_TYPE, authority_id))
-                .map(|p| p.encode())
-                .map(sp_consensus_babe::OpaqueKeyOwnershipProof::new)
+            None
+            // Historical::prove((sp_consensus_babe::KEY_TYPE, authority_id))
+            //     .map(|p| p.encode())
+            //     .map(sp_consensus_babe::OpaqueKeyOwnershipProof::new)
         }
 
         fn submit_report_equivocation_unsigned_extrinsic(

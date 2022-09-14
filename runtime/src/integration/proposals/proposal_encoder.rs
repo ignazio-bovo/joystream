@@ -50,9 +50,10 @@ impl ProposalEncoder<Runtime> for ExtrinsicProposalEncoder {
             ProposalDetails::FundingRequest(funding_requests) => {
                 Call::Council(council::Call::funding_request { funding_requests })
             }
-            ProposalDetails::SetMaxValidatorCount(new) => {
-                Call::Staking(pallet_staking::Call::set_validator_count { new })
-            }
+            // TODO: enable after enable staking
+            // ProposalDetails::SetMaxValidatorCount(new) => {
+            //     Call::Staking(pallet_staking::Call::set_validator_count { new })
+            // }
             ProposalDetails::RuntimeUpgrade(wasm) => {
                 Call::JoystreamUtility(joystream_utility::Call::execute_runtime_upgrade_proposal {
                     wasm,

@@ -51,8 +51,9 @@ pub enum ProposalDetails<
     /// Vector of balance and destination accounts for the `FundingRequest` proposal
     FundingRequest(Vec<FundingRequestParameters<Balance, AccountId>>),
 
-    /// `Set Max Validator Count` proposal
-    SetMaxValidatorCount(u32),
+    // TODO: enable after enabling staking
+    // /// `Set Max Validator Count` proposal
+    //SetMaxValidatorCount(u32),
 
     /// `Create Working Group Lead Opening` Proposal:
     /// Add opening for the working group leader position.
