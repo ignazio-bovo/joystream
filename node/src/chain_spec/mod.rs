@@ -30,8 +30,8 @@ use grandpa_primitives::AuthorityId as GrandpaId;
 use node_runtime::{
     constants::currency::{ENDOWMENT, MIN_NOMINATOR_BOND, MIN_VALIDATOR_BOND, STASH},
     wasm_binary_unwrap, BabeConfig, BalancesConfig, Block, ContentConfig,
-    GrandpaConfig, MaxNominations, SessionConfig, SessionKeys, StakerStatus,
-    StakingConfig, StorageConfig, SudoConfig, SystemConfig, TransactionPaymentConfig,
+    GrandpaConfig, SessionKeys, StakerStatus,
+    StorageConfig, SudoConfig, SystemConfig, TransactionPaymentConfig,
     VestingConfig,
 };
 use sc_chain_spec::ChainSpecExtension;
@@ -175,30 +175,6 @@ pub fn testnet_genesis(
             }
         });
 
-    // stakers: all validators and nominators.
-    let mut rng = rand::thread_rng();
-    let stakers = initial_authorities
-        .iter()
-        .map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
-        .chain(initial_nominators.iter().map(|x| {
-            use rand::{seq::SliceRandom, Rng};
-            let limit = (MaxNominations::get() as usize).min(initial_authorities.len());
-            let count = (rng.gen::<usize>() % limit).saturating_add(1); // at least one nomination
-            let nominations = initial_authorities
-                .as_slice()
-                .choose_multiple(&mut rng, count)
-                .into_iter()
-                .map(|choice| choice.0.clone())
-                .collect::<Vec<_>>();
-            (
-                x.clone(),
-                x.clone(),
-                STASH,
-                StakerStatus::Nominator(nominations),
-            )
-        }))
-        .collect::<Vec<_>>();
-
     // staking benchmakrs is not sensitive to actual value of min bonds so
     // accounts are not funded with sufficient funds and fail with InsufficientBond err
     // so for benchmarks we set min bond to zero.
@@ -228,28 +204,6 @@ pub fn testnet_genesis(
                         .map(|(account, balance)| (account.clone(), *balance)),
                 )
                 .collect(),
-        },
-        session: SessionConfig {
-            keys: initial_authorities
-                .iter()
-                .map(|x| {
-                    (
-                        x.0.clone(),
-                        x.0.clone(),
-                        session_keys(x.2.clone(), x.3.clone()),
-                    )
-                })
-                .collect::<Vec<_>>(),
-        },
-        staking: StakingConfig {
-            validator_count: initial_authorities.len() as u32,
-            minimum_validator_count: initial_authorities.len() as u32,
-            invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
-            slash_reward_fraction: Perbill::from_percent(10),
-            stakers,
-            min_nominator_bond,
-            min_validator_bond,
-            ..Default::default()
         },
         sudo: SudoConfig {
             key: Some(root_key),
