@@ -1419,6 +1419,16 @@ where
         self.revenue_split.deactivate()
     }
 
+    pub(crate) fn ensure_active_revenue_split<T: crate::Config>(
+        &self,
+    ) -> Result<RevenueSplitInfo<JoyBalance, BlockNumber>, DispatchError> {
+        self.revenue_split.ensure_active::<T>()
+    }
+
+    pub(crate) fn account_for_split_dividend(&mut self, dividend_amount: JoyBalance) {
+        self.revenue_split.account_for_dividend(dividend_amount)
+    }
+
     pub(crate) fn from_params<T: crate::Config>(
         params: TokenIssuanceParametersOf<T>,
     ) -> Result<TokenDataOf<T>, DispatchError> {

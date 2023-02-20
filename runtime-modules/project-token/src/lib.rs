@@ -720,7 +720,7 @@ decl_module! {
             );
 
             let token_info = Self::ensure_token_exists(token_id)?;
-            let split_info = token_info.revenue_split.ensure_active::<T>()?;
+            let split_info = token_info.ensure_active_revenue_split::<T>()?;
             let split_id = token_info.next_revenue_split_id
                 .checked_sub(1)
                 .ok_or(Error::<T>::ArithmeticError)?;
@@ -757,7 +757,7 @@ decl_module! {
             )?;
 
             TokenInfoById::<T>::mutate(token_id, |token_info| {
-                token_info.revenue_split.account_for_dividend(dividend_amount);
+                token_info.account_for_split_dividend(dividend_amount);
             });
 
             AccountInfoByTokenAndMember::<T>::mutate(token_id, &member_id, |account_info| {
@@ -811,7 +811,7 @@ decl_module! {
 
             // staking_info.split_id in [0,token_info.next_revenue_split_id) is a runtime invariant
             if staking_info.split_id == current_split_id {
-                if let Ok(split_info) = token_info.revenue_split.ensure_active::<T>() {
+                if let Ok(split_info) = token_info.ensure_active_revenue_split::<T>() {
                     ensure!(
                         split_info.timeline.is_ended(Self::current_block()),
                         Error::<T>::RevenueSplitDidNotEnd,
@@ -1479,7 +1479,7 @@ impl<T: Config>
     fn finalize_revenue_split(token_id: T::TokenId, account_id: T::AccountId) -> DispatchResult {
         let token_info = Self::ensure_token_exists(token_id)?;
 
-        let split_info = token_info.revenue_split.ensure_active::<T>()?;
+        let split_info = token_info.ensure_active_revenue_split::<T>()?;
 
         let current_block = Self::current_block();
         ensure!(
