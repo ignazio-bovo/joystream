@@ -610,6 +610,26 @@ fn amm_sell_ok_with_user_joy_balance_correctly_increased() {
 
 #[test]
 fn amm_sell_ok_with_user_crt_amount_correctly_decreased() {
+    build_default_test_externalities_with_balances(vec![(FIRST_USER_ACCOUNT_ID, joy!(5_000_000))])
+        .execute_with(|| {
+            IssueTokenFixture::new().execute_call().unwrap();
+            ActivateAmmFixture::new().execute_call().unwrap();
+            AmmBuyFixture::new().execute_call().unwrap();
+            let user_crt_pre =
+                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_ACCOUNT_ID)
+                    .amount;
+
+            AmmSellFixture::new().execute_call().unwrap();
+
+            let user_crt_post =
+                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_ACCOUNT_ID)
+                    .amount;
+            assert_eq!(user_crt_pre - user_crt_post, DEFAULT_AMM_SELL_AMOUNT);
+        })
+}
+
+#[test]
+fn amm_sell_ok_with_user_crt_amount_correctly_decreased() {
     build_default_test_externalities().execute_with(|| {
         TokenContext::with_issuer_and_first_user();
         ActivateAmmFixture::new().run();
@@ -683,13 +703,16 @@ fn deactivate_fails_with_invalid_token_id() {
 #[test]
 fn deactivate_fails_with_too_much_amm_provided_supply_outstanding() {
     let amount = Permill::from_percent(10).mul_floor(DEFAULT_INITIAL_ISSUANCE);
-    build_default_test_externalities().execute_with(|| {
+    build_default_test_externalities_with_balances(vec![(
+        FIRST_USER_ACCOUNT_ID,
+        joy!(10_000_000_000_000_000_000),
+    )])
+    .execute_with(|| {
         IssueTokenFixture::new()
             .with_initial_supply(1_000u128)
             .execute_call()
             .unwrap();
-        ActivateAmmFixture::new().run();
-        increase_account_balance(&FIRST_USER_ACCOUNT_ID, joy!(10_000_000_000_000_000_000));
+        ActivateAmmFixture::new().execute_call().unwrap();
         AmmBuyFixture::new()
             .with_amount(amount)
             .execute_call()
