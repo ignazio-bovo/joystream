@@ -27,6 +27,9 @@ frame-benchmarking = { package = 'frame-benchmarking', default-features = false,
 randomness-collective-flip = { package = 'pallet-randomness-collective-flip', default-features = false, git = 'https://github.com/joystream/substrate.git', rev = 'd29a53b11c3e530d1656eef502cb0f1f8fff3522'}
 staking-handler = { package = 'pallet-staking-handler', default-features = false, path = '../staking-handler'}
 sp-storage = { package = 'sp-storage', default-features = false, git = 'https://github.com/joystream/substrate.git', rev = 'd29a53b11c3e530d1656eef502cb0f1f8fff3522'}
+derive-fixture = { package = 'derive-fixture', default-features = false, path = '../support/derive-fixture'}
+derive-new = "0.5"
+parameterized = "1.0.1"
 
 [features]
 default = ['std']

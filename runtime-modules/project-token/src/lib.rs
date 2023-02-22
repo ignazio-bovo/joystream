@@ -405,6 +405,7 @@ decl_module! {
             )?;
 
             // == MUTATION SAFE ==
+
             AccountInfoByTokenAndMember::<T>::remove(token_id, &member_id);
 
             TokenInfoById::<T>::mutate(token_id, |token_info| {

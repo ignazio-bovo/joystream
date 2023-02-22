@@ -29,6 +29,10 @@ pub trait Fixture {
 
         result
     }
+
+    fn run(&self) {
+        self.execute_call().unwrap()
+    }
 }
 
 pub fn default_upload_context() -> UploadContext {
@@ -106,9 +110,9 @@ impl Fixture for IssueTokenFixture {
         let issuance_params = IssuanceParams {
             patronage_rate: self.patronage_rate,
             symbol: self.symbol,
-            transfer_policy: self.transfer_policy_params,
+            transfer_policy: self.transfer_policy_params.clone(),
             revenue_split_rate: self.revenue_split_rate,
-            initial_allocation: self.initial_allocation,
+            initial_allocation: self.initial_allocation.clone(),
         };
         Token::issue_token(
             self.issuer_account.clone(),
@@ -119,6 +123,37 @@ impl Fixture for IssueTokenFixture {
     }
 }
 
+#[derive(Fixture, new)]
+pub struct BurnFixture {
+    #[new(value = "DEFAULT_ISSUER_ACCOUNT_ID")]
+    sender: AccountId,
+
+    #[new(value = "DEFAULT_TOKEN_ID")]
+    token_id: TokenId,
+
+    #[new(value = "DEFAULT_ISSUER_MEMBER_ID")]
+    member_id: MemberId,
+
+    #[new(value = "DEFAULT_USER_BURN_AMOUNT")]
+    amount: Balance,
+}
+
+impl BurnFixture {
+    pub fn with_user(self, account_id: AccountId, member_id: MemberId) -> Self {
+        self.with_sender(account_id).with_member_id(member_id)
+    }
+}
+
+impl Fixture for BurnFixture {
+    fn execute(&self) -> DispatchResult {
+        Token::burn(
+            Origin::signed(self.sender),
+            self.token_id,
+            self.member_id,
+            self.amount,
+        )
+    }
+}
 #[derive(Fixture, new)]
 pub struct InitTokenSaleFixture {
     #[new(value = "DEFAULT_TOKEN_ID")]
@@ -139,7 +174,7 @@ pub struct InitTokenSaleFixture {
     #[new(value = "DEFAULT_SALE_DURATION")]
     duration: BlockNumber,
 
-    #[new(value = "Some(DEFAULT_SALE_DURATION)")]
+    #[new(default)]
     start_block: Option<BlockNumber>,
 
     #[new(value = "DEFAULT_SALE_UNIT_PRICE")]
@@ -165,7 +200,7 @@ impl Fixture for InitTokenSaleFixture {
     fn execute(&self) -> DispatchResult {
         let sale_params = TokenSaleParams {
             duration: self.duration,
-            metadata: self.metadata,
+            metadata: self.metadata.clone(),
             starts_at: self.start_block,
             unit_price: self.unit_price,
             upper_bound_quantity: self.upper_bound_quantity,
@@ -326,24 +361,29 @@ pub struct TransferFixture {
     #[new(value = "DEFAULT_TOKEN_ID")]
     token_id: TokenId,
 
-    #[new(value = "DEFAULT_ISSUER_ACCOUNT_ID")]
+    #[new(value = "DEFAULT_ISSUER_MEMBER_ID")]
     src_member_id: MemberId,
 
-    #[new(value = "new_transfers(vec![(FIRST_USER_MEMBER_ID, DEFAULT_SPLIT_PARTICIPATION)])")]
+    #[new(value = "new_transfers(vec![(FIRST_USER_MEMBER_ID, DEFAULT_USER_BALANCE)])")]
     outputs: TransferOutputsOf<Test>,
 
     #[new(default)]
     metadata: Vec<u8>,
 }
 
+impl TransferFixture {
+    pub fn with_output(self, member_id: MemberId, amount: Balance) -> Self {
+        self.with_outputs(new_transfers(vec![(member_id, amount)]))
+    }
+}
 impl Fixture for TransferFixture {
     fn execute(&self) -> DispatchResult {
         Token::transfer(
             Origin::signed(self.sender),
             self.src_member_id,
             self.token_id,
-            self.outputs,
-            self.metadata,
+            self.outputs.clone(),
+            self.metadata.clone(),
         )
     }
 }
@@ -393,13 +433,13 @@ impl Fixture for ActivateAmmFixture {
 
 #[derive(Fixture, new)]
 pub struct AmmBuyFixture {
-    #[new(value = "DEFAULT_ISSUER_ACCOUNT_ID")]
+    #[new(value = "FIRST_USER_ACCOUNT_ID")]
     sender: AccountId,
 
     #[new(value = "DEFAULT_TOKEN_ID")]
     token_id: TokenId,
 
-    #[new(value = "DEFAULT_ISSUER_MEMBER_ID")]
+    #[new(value = "FIRST_USER_MEMBER_ID")]
     member_id: MemberId,
 
     #[new(value = "DEFAULT_AMM_BUY_AMOUNT")]
@@ -478,6 +518,42 @@ pub struct ClaimPatronageCreditFixture {
 impl Fixture for ClaimPatronageCreditFixture {
     fn execute(&self) -> DispatchResult {
         Token::claim_patronage_credit(self.token_id, self.member_id)
+    }
+}
+
+#[derive(Fixture, new)]
+pub struct DustAccountFixture {
+    #[new(value = "DEFAULT_ISSUER_ACCOUNT_ID")]
+    sender: AccountId,
+
+    #[new(value = "DEFAULT_ISSUER_MEMBER_ID")]
+    member_id: MemberId,
+
+    #[new(value = "DEFAULT_TOKEN_ID")]
+    token_id: TokenId,
+}
+
+impl DustAccountFixture {
+    pub fn with_user(self, account_id: AccountId, member_id: MemberId) -> Self {
+        self.with_sender(account_id).with_member_id(member_id)
+    }
+}
+
+impl Fixture for DustAccountFixture {
+    fn execute(&self) -> DispatchResult {
+        Token::dust_account(Origin::signed(self.sender), self.token_id, self.member_id)
+    }
+}
+
+#[derive(Fixture, new)]
+pub struct DeissueTokenFixture {
+    #[new(value = "DEFAULT_TOKEN_ID")]
+    token_id: TokenId,
+}
+
+impl Fixture for DeissueTokenFixture {
+    fn execute(&self) -> DispatchResult {
+        Token::deissue_token(self.token_id)
     }
 }
 

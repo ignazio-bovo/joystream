@@ -67,8 +67,7 @@ fn amm_buy_succeeds_with_new_user() {
 
             let account_number_post = Token::token_info_by_id(DEFAULT_TOKEN_ID).accounts_number;
             let account_data =
-                Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_ACCOUNT_ID)
-                    .unwrap();
+                Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
             assert_eq!(account_number_post - account_number_pre, 1);
             assert_eq!(account_data.amount, DEFAULT_AMM_BUY_AMOUNT);
             assert_eq!(
@@ -101,7 +100,7 @@ fn amm_buy_succeeds_with_existing_user() {
             FinalizeTokenSaleFixture::new().execute_call().unwrap();
             ActivateAmmFixture::new().execute_call().unwrap();
             let user_amount_pre =
-                Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_ACCOUNT_ID)
+                Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID)
                     .unwrap()
                     .amount;
 
@@ -148,16 +147,13 @@ fn amm_buy_fails_with_pricing_function_overflow() {
 
 #[test]
 fn amm_buy_ok_with_creator_token_issuance_increased() {
-    build_default_test_externalities_with_balances(vec![(FIRST_USER_MEMBER_ID, joy!(5_000_000))])
+    build_default_test_externalities_with_balances(vec![(FIRST_USER_ACCOUNT_ID, joy!(5_000_000))])
         .execute_with(|| {
             IssueTokenFixture::new().execute_call().unwrap();
             ActivateAmmFixture::new().execute_call().unwrap();
             let supply_pre = Token::token_info_by_id(DEFAULT_TOKEN_ID).total_supply;
 
-            AmmBuyFixture::new()
-                .with_amount(DEFAULT_AMM_BUY_AMOUNT)
-                .execute_call()
-                .unwrap();
+            AmmBuyFixture::new().execute_call().unwrap();
 
             let supply_post = Token::token_info_by_id(DEFAULT_TOKEN_ID).total_supply;
             assert_eq!(supply_post, supply_pre + DEFAULT_AMM_BUY_AMOUNT);
@@ -166,7 +162,7 @@ fn amm_buy_ok_with_creator_token_issuance_increased() {
 
 #[test]
 fn amm_treasury_balance_correctly_increased_during_amm_buy() {
-    build_default_test_externalities_with_balances(vec![(FIRST_USER_MEMBER_ID, joy!(5_000_000))])
+    build_default_test_externalities_with_balances(vec![(FIRST_USER_ACCOUNT_ID, joy!(5_000_000))])
         .execute_with(|| {
             IssueTokenFixture::new().execute_call().unwrap();
             ActivateAmmFixture::new().execute_call().unwrap();
@@ -426,7 +422,7 @@ fn amm_sell_fails_with_user_not_having_enough_token_balance() {
 }
 
 #[test]
-fn amm_sell_fails_with_invalid_token_specified() {
+fn amm_sell_fails_with_invalid_token_id() {
     build_default_test_externalities_with_balances(vec![(FIRST_USER_ACCOUNT_ID, joy!(5_000_000))])
         .execute_with(|| {
             IssueTokenFixture::new().execute_call().unwrap();
@@ -434,7 +430,7 @@ fn amm_sell_fails_with_invalid_token_specified() {
             AmmBuyFixture::new().execute_call().unwrap();
 
             let result = AmmSellFixture::new()
-                .with_token_id(DEFAULT_TOKEN_ID)
+                .with_token_id(DEFAULT_TOKEN_ID + 1)
                 .execute_call();
 
             assert_err!(result, Error::<Test>::TokenDoesNotExist);
@@ -605,13 +601,13 @@ fn amm_sell_ok_with_user_crt_amount_correctly_decreased() {
             ActivateAmmFixture::new().execute_call().unwrap();
             AmmBuyFixture::new().execute_call().unwrap();
             let user_crt_pre =
-                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_ACCOUNT_ID)
+                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_MEMBER_ID)
                     .amount;
 
             AmmSellFixture::new().execute_call().unwrap();
 
             let user_crt_post =
-                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_ACCOUNT_ID)
+                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_MEMBER_ID)
                     .amount;
             assert_eq!(user_crt_pre - user_crt_post, DEFAULT_AMM_SELL_AMOUNT);
         })

@@ -5,6 +5,7 @@ use frame_support::{
     traits::{Currency, OnFinalize, OnInitialize},
 };
 
+pub(crate) use crate::utils::{build_merkle_path_helper, generate_merkle_root_helper};
 use common::locks::{BoundStakingAccountLockId, InvitedMemberLockId};
 use common::membership::{MemberOriginValidator, MembershipInfoProvider};
 use frame_support::{
@@ -25,7 +26,6 @@ use sp_std::convert::{TryFrom, TryInto};
 use staking_handler::{LockComparator, StakingHandler};
 
 // crate import
-pub(crate) use crate::utils::{build_merkle_path_helper, generate_merkle_root_helper};
 use crate::{
     types::*, AccountDataOf, Config, TokenDataOf, TokenIssuanceParametersOf, TransferPolicyOf,
 };
@@ -54,6 +54,8 @@ pub type Policy = TransferPolicyOf<Test>;
 pub type Hashing = <Test as frame_system::Config>::Hashing;
 pub type HashOut = <Test as frame_system::Config>::Hash;
 pub type VestingSchedule = VestingScheduleOf<Test>;
+pub type MerkleProof = MerkleProofOf<Test>;
+pub type TokenAllocation = TokenAllocationOf<Test>;
 pub type MemberId = u64;
 
 #[macro_export]
@@ -543,7 +545,10 @@ pub fn build_test_externalities(config: token::GenesisConfig<Test>) -> TestExter
 
 /// test externalities
 pub fn build_default_test_externalities() -> TestExternalities {
-    build_default_test_externalities_with_balances(vec![])
+    build_default_test_externalities_with_balances(vec![(
+        DEFAULT_ISSUER_ACCOUNT_ID,
+        3 * DEFAULT_BLOAT_BOND + ed(),
+    )])
 }
 
 /// test externalities with empty Chain State and specified balance allocation
@@ -630,10 +635,17 @@ macro_rules! block {
 pub const DEFAULT_TOKEN_ID: u64 = 1;
 pub const DEFAULT_ISSUER_ACCOUNT_ID: u64 = 1001;
 pub const DEFAULT_ISSUER_MEMBER_ID: u64 = 1;
-pub const DEFAULT_BLOAT_BOND: u128 = 0;
+pub const DEFAULT_BLOAT_BOND: u128 = 100;
 pub const DEFAULT_INITIAL_ISSUANCE: u128 = 100_000_000;
 pub const MIN_REVENUE_SPLIT_DURATION: u64 = 10;
 pub const MIN_REVENUE_SPLIT_TIME_TO_START: u64 = 10;
+pub const FIRST_USER_ACCOUNT_ID: u64 = 1002;
+pub const FIRST_USER_MEMBER_ID: u64 = 2;
+pub const SECOND_USER_ACCOUNT_ID: u64 = 1003;
+pub const SECOND_USER_MEMBER_ID: u64 = 3;
+pub const DEFAULT_USER_BURN_AMOUNT: u128 = 1000;
+pub const DEFAULT_USER_BALANCE: u128 = 10_000_000;
+pub const DEFAULT_USER_ALLOCATION_BALANCE: u128 = 1_000_000;
 
 // ------ Patronage Constants ----------------
 pub const DEFAULT_MAX_YEARLY_PATRONAGE_RATE: Permill = Permill::from_percent(15);
@@ -678,7 +690,7 @@ macro_rules! merkle_root {
 #[macro_export]
 macro_rules! merkle_proof {
     ($idx:expr,[$($vals:expr),*]) => {
-        MerkleProofOf::<Test>::new(build_merkle_path_helper::<Test, _>(&vec![$($vals,)*], $idx as usize))
+        MerkleProof::new(build_merkle_path_helper::<Test, _>(&vec![$($vals,)*], $idx as usize))
     };
 }
 
