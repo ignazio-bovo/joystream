@@ -616,13 +616,13 @@ fn amm_sell_ok_with_user_crt_amount_correctly_decreased() {
             ActivateAmmFixture::new().execute_call().unwrap();
             AmmBuyFixture::new().execute_call().unwrap();
             let user_crt_pre =
-                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_ACCOUNT_ID)
+                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_MEMBER_ID)
                     .amount;
 
             AmmSellFixture::new().execute_call().unwrap();
 
             let user_crt_post =
-                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_ACCOUNT_ID)
+                Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_MEMBER_ID)
                     .amount;
             assert_eq!(user_crt_pre - user_crt_post, DEFAULT_AMM_SELL_AMOUNT);
         })
