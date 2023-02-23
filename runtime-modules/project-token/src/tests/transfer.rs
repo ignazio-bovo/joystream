@@ -1,33 +1,16 @@
 #![cfg(test)]
-use frame_support::{assert_noop, assert_ok};
+use crate::errors::Error;
+use crate::tests::test_utils::new_issuer_transfers;
+use crate::tests::{fixtures::*, mock::*};
+use crate::types::{Transfers, Validated, VestingSource};
+use crate::{last_event_eq, RawEvent, RepayableBloatBond};
+use frame_support::traits::Currency;
+use frame_support::{assert_err, assert_ok};
+use sp_runtime::traits::Zero;
+use sp_runtime::{DispatchError, Permill};
+use test_case::test_case;
 
-use crate::tests::mock::*;
-use crate::tests::test_utils::{
-    default_vesting_schedule, new_issuer_transfers, new_transfers, TokenDataBuilder,
-};
-use crate::traits::PalletToken;
-use crate::types::{TransferPolicyOf, Transfers, Validated, VestingSource};
-use crate::Config;
-use crate::{
-    balance, joy, last_event_eq, member, merkle_root, origin, token, Error, RawEvent,
-    RepayableBloatBond,
-};
-use sp_runtime::{traits::Hash, DispatchError, Permill};
-use sp_std::{collections::btree_map::BTreeMap, convert::TryInto};
-
-// some helpers
-macro_rules! outputs {
-    [$(($a:expr, $b: expr)),*] => {
-        new_transfers(vec![$(($a, $b),)*])
-    };
-}
-
-macro_rules! issuer_outputs {
-    [$(($a:expr, $b: expr, $c: expr)),*] => {
-        new_issuer_transfers(vec![$(($a, $b, $c),)*])
-    };
-}
-
+// helpers
 macro_rules! validated_outputs {
     [$(($a:expr, $b: expr, $c: expr, $d: expr)),*] => {
         Transfers::<_,_>::new_validated(vec![$(($a, $b, $c, $d),)*])
@@ -37,103 +20,60 @@ macro_rules! validated_outputs {
 // permissionless transfer tests
 #[test]
 fn transfer_fails_with_non_existing_token() {
-    let token_id = token!(1);
-    let config = GenesisConfigBuilder::new_empty().build();
-    let origin = origin!(member!(1).1);
-    let src_member_id = member!(1).0;
-    let out = outputs![(member!(2).0, balance!(1))];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, 2 * DEFAULT_BLOAT_BOND + ed());
 
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(origin, src_member_id, token_id, out, vec![]);
+        let result = TransferFixture::new()
+            .with_token_id(DEFAULT_TOKEN_ID + 1)
+            .execute_call();
 
-        assert_noop!(result, Error::<Test>::TokenDoesNotExist);
+        assert_err!(result, Error::<Test>::TokenDoesNotExist);
     })
 }
 
 #[test]
 fn transfer_fails_with_non_existing_source() {
-    let token_id = token!(1);
-    let origin = origin!(member!(1).1);
-    let src_member_id = member!(1).0;
-    let (dst, amount) = (member!(2).0, balance!(100));
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, 2 * DEFAULT_BLOAT_BOND + ed());
 
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
+        let result = TransferFixture::new()
+            .with_sender(SECOND_USER_ACCOUNT_ID)
+            .with_src_member_id(SECOND_USER_MEMBER_ID)
+            .execute_call();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_data)
-        .with_account(dst, ConfigAccountData::new_with_amount(amount))
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(
-            origin,
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
-
-        assert_noop!(result, Error::<Test>::AccountInformationDoesNotExist);
+        assert_err!(result, Error::<Test>::AccountInformationDoesNotExist);
     })
 }
 
+// TODO(Integration Test): move this to integration tests as it should fail because we are not able to peek inside Membership pallet
 #[test]
 fn transfer_fails_with_non_existing_dst_member() {
-    let token_id = token!(1);
-    let origin = origin!(member!(1).1);
-    let src_member_id = member!(1).0;
-    let (dst, amount) = (member!(9999).0, balance!(100));
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, 2 * DEFAULT_BLOAT_BOND + ed());
 
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
+        // !! second member id should not exist on the Membership pallet
+        let result = TransferFixture::new()
+            .with_output(9999, DEFAULT_USER_BALANCE)
+            .execute_call();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_data)
-        .with_account(src_member_id, ConfigAccountData::new_with_amount(amount))
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(
-            origin,
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
-
-        assert_noop!(result, Error::<Test>::TransferDestinationMemberDoesNotExist);
+        assert_err!(result, Error::<Test>::TransferDestinationMemberDoesNotExist);
     })
 }
 
 #[test]
 fn transfer_fails_with_invalid_src_member_controller() {
-    let token_id = token!(1);
-    let origin = origin!(member!(2).0);
-    let src_member_id = member!(1).0;
-    let (dst, amount) = (member!(2).0, balance!(100));
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, 2 * DEFAULT_BLOAT_BOND + ed());
 
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
+        let result = TransferFixture::new()
+            .with_sender(SECOND_USER_ACCOUNT_ID)
+            .execute_call();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_data)
-        .with_account(src_member_id, ConfigAccountData::new_with_amount(amount))
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(
-            origin,
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
-
-        assert_noop!(
+        assert_err!(
             result,
             DispatchError::Other("origin signer not a member controller account")
         );
@@ -142,56 +82,22 @@ fn transfer_fails_with_invalid_src_member_controller() {
 
 #[test]
 fn permissionless_transfer_fails_with_src_having_insufficient_funds_for_bloat_bond() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_bloat_bond(joy!(100))
-        .build();
+        let result = TransferFixture::new().execute_call();
 
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
-
-        assert_noop!(result, Error::<Test>::InsufficientJoyBalance);
+        assert_err!(result, Error::<Test>::InsufficientJoyBalance);
     })
 }
 
 #[test]
 fn permissionless_transfer_ok_with_non_existing_destination() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
-    let bloat_bond = joy!(100);
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_bloat_bond(bloat_bond)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + bloat_bond);
-
-        let result = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
+        let result = TransferFixture::new().execute_call();
 
         assert_ok!(result);
     })
@@ -199,35 +105,17 @@ fn permissionless_transfer_ok_with_non_existing_destination() {
 
 #[test]
 fn permissionless_transfer_ok_with_new_destination_created() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
-    let bloat_bond = joy!(100);
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_bloat_bond(bloat_bond)
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + bloat_bond);
-
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
+        TransferFixture::new().run();
 
         assert_ok!(
-            Token::ensure_account_data_exists(token_id, &dst),
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &SECOND_USER_MEMBER_ID),
             AccountData::new_with_amount_and_bond(
-                amount,
-                RepayableBloatBond::new(bloat_bond, None)
+                DEFAULT_USER_BALANCE,
+                RepayableBloatBond::new(DEFAULT_BLOAT_BOND, None)
             )
         );
     })
@@ -235,154 +123,69 @@ fn permissionless_transfer_ok_with_new_destination_created() {
 
 #[test]
 fn transfer_ok_with_new_destinations_created_and_account_number_incremented() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (dst1, amount1) = (member!(2).0, balance!(100));
-    let (dst2, amount2) = (member!(3).0, balance!(100));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2);
-    let bloat_bond = joy!(100);
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
+        let accounts_number_pre = Token::token_info_by_id(DEFAULT_TOKEN_ID).accounts_number;
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_bloat_bond(bloat_bond)
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .build();
+        TransferFixture::new().run();
 
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + 2 * bloat_bond);
-
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst1, amount1), (dst2, amount2)],
-            vec![],
+        assert_eq!(
+            accounts_number_pre + 1,
+            Token::token_info_by_id(DEFAULT_TOKEN_ID).accounts_number,
         );
-
-        assert_eq!(Token::token_info_by_id(token_id).accounts_number, 3u64);
     })
 }
 
 #[test]
 fn permissionless_transfer_ok_for_new_destination_with_bloat_bond_slashed_from_src() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let bloat_bond = joy!(100);
-    let (dst, amount) = (member!(2).0, balance!(100));
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_bloat_bond(bloat_bond)
-        .build();
+        TransferFixture::new().run();
 
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + bloat_bond);
-
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
-
-        assert_eq!(
-            Balances::usable_balance(&src_acc),
-            ExistentialDeposit::get()
-        );
+        assert_eq!(Balances::usable_balance(&FIRST_USER_ACCOUNT_ID), ed());
     })
 }
 
 #[test]
 fn permissionless_transfer_ok_for_new_destination_with_bloat_bond_transferred_to_treasury() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (treasury, bloat_bond) = (Token::module_treasury_account(), joy!(100));
-    let (dst, amount) = (member!(2).0, balance!(100));
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
+        let treasury_balance_pre = Balances::usable_balance(&Token::module_treasury_account());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_bloat_bond(bloat_bond)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + bloat_bond);
-
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
+        TransferFixture::new().run();
 
         assert_eq!(
-            Balances::usable_balance(&treasury),
-            bloat_bond + ExistentialDeposit::get(), // treasury initial balance = Existential deposit
+            Balances::usable_balance(&Token::module_treasury_account()),
+            treasury_balance_pre + DEFAULT_BLOAT_BOND,
         );
     })
 }
 
 #[test]
 fn permissionless_transfer_fails_with_source_not_having_sufficient_free_balance() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (dst, amount) = (member!(2).0, balance!(100));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount - balance!(1));
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::new()
+            .with_first_user_balance(Some(Zero::zero()))
+            .build();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .with_account(dst, ConfigAccountData::default())
-        .build();
+        let result = TransferFixture::new().execute_call();
 
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get());
-
-        let result = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
-
-        assert_noop!(result, Error::<Test>::InsufficientTransferrableBalance);
+        assert_err!(result, Error::<Test>::InsufficientTransferrableBalance);
     })
 }
 
 #[test]
 fn permissionless_transfer_ok() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_account(dst, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get());
-
-        let result = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
+        let result = TransferFixture::new().execute_call();
 
         assert_ok!(result);
     })
@@ -390,34 +193,21 @@ fn permissionless_transfer_ok() {
 
 #[test]
 fn permissionless_transfer_ok_with_event_deposit() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
-    let outputs = outputs![(dst, amount)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_users();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_account(dst, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get());
-
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs.clone(),
-            b"metadata".to_vec(),
-        );
+        TransferFixture::new().run();
 
         last_event_eq!(RawEvent::TokenAmountTransferred(
-            token_id,
-            src_member_id,
-            validated_outputs![(Validated::<_>::Existing(dst), amount, None, None)],
+            DEFAULT_TOKEN_ID,
+            FIRST_USER_MEMBER_ID,
+            validated_outputs![(
+                Validated::<_>::Existing(SECOND_USER_MEMBER_ID),
+                DEFAULT_USER_BALANCE,
+                None,
+                None
+            )],
             b"metadata".to_vec()
         ));
     })
@@ -425,62 +215,38 @@ fn permissionless_transfer_ok_with_event_deposit() {
 
 #[test]
 fn permissionless_transfer_ok_with_destination_receiving_funds() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let ((src_member_id, src_acc), amount) = (member!(1), balance!(100));
-    let dst = member!(2).0;
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_users();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
+        let balance_pre =
+            Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, SECOND_USER_MEMBER_ID)
+                .transferrable::<Test>(System::block_number());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_account(dst, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get());
-
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst, amount)],
-            vec![],
-        );
+        TransferFixture::new().run();
 
         assert_eq!(
-            Token::account_info_by_token_and_member(token_id, dst)
+            Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, SECOND_USER_MEMBER_ID)
                 .transferrable::<Test>(System::block_number()),
-            amount
+            balance_pre + DEFAULT_USER_BALANCE
         );
     })
 }
 
 #[test]
 fn transfer_ok_without_change_in_token_supply() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2);
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_users();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
+        let supply_pre = Token::token_info_by_id(DEFAULT_TOKEN_ID).total_supply;
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .with_account(dst1, ConfigAccountData::default())
-        .build();
+        TransferFixture::new()
+            .with_output(SECOND_USER_MEMBER_ID, DEFAULT_USER_BALANCE)
+            .run();
 
-    build_test_externalities(config).execute_with(|| {
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs![(dst1, amount1), (dst2, amount2)],
-            vec![],
+        assert_eq!(
+            Token::token_info_by_id(DEFAULT_TOKEN_ID).total_supply,
+            supply_pre
         );
-
-        assert_eq!(Token::token_info_by_id(token_id).total_supply, src_balance);
     })
 }
 
@@ -488,25 +254,18 @@ fn transfer_ok_without_change_in_token_supply() {
 
 #[test]
 fn multiout_transfer_ok_with_non_existing_destination() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let bloat_bond = joy!(100);
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2);
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_info, src_member_id, src_balance)
-        .with_account(dst1, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + bloat_bond);
-
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
+        let result = TransferFixture::new()
+            .with_sender(DEFAULT_ISSUER_ACCOUNT_ID)
+            .with_src_member_id(DEFAULT_ISSUER_MEMBER_ID)
+            .with_multioutput_and_same_amount(
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+            )
+            .execute_call();
 
         assert_ok!(result);
     })
@@ -514,47 +273,38 @@ fn multiout_transfer_ok_with_non_existing_destination() {
 
 #[test]
 fn multiout_transfer_fails_with_src_having_insufficient_funds_for_bloat_bond() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance, bloat_bond) =
-        (member!(1), amount1 + amount2, joy!(100));
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        Balances::make_free_balance_be(&DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_info, src_member_id, src_balance)
-        .with_bloat_bond(bloat_bond)
-        .build();
+        let result = TransferFixture::new()
+            .with_sender(DEFAULT_ISSUER_ACCOUNT_ID)
+            .with_src_member_id(DEFAULT_ISSUER_MEMBER_ID)
+            .with_multioutput_and_same_amount(
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+            )
+            .execute_call();
 
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
-
-        assert_noop!(result, Error::<Test>::InsufficientJoyBalance);
+        assert_err!(result, Error::<Test>::InsufficientJoyBalance);
     })
 }
 
 #[test]
 fn multiout_transfer_ok() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2);
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_info, src_member_id, src_balance)
-        .with_account(dst1, ConfigAccountData::default())
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
+        let result = TransferFixture::new()
+            .with_sender(DEFAULT_ISSUER_ACCOUNT_ID)
+            .with_src_member_id(DEFAULT_ISSUER_MEMBER_ID)
+            .with_multioutput_and_same_amount(
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+            )
+            .execute_call();
 
         assert_ok!(result);
     })
@@ -562,38 +312,35 @@ fn multiout_transfer_ok() {
 
 #[test]
 fn multiout_transfer_ok_with_event_deposit() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let bloat_bond = joy!(100);
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2);
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_info, src_member_id, src_balance)
-        .with_account(dst1, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + bloat_bond);
-
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs.clone(),
-            b"metadata".to_vec(),
-        );
+        TransferFixture::new()
+            .with_sender(DEFAULT_ISSUER_ACCOUNT_ID)
+            .with_src_member_id(DEFAULT_ISSUER_MEMBER_ID)
+            .with_multioutput_and_same_amount(
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+            )
+            .run();
 
         last_event_eq!(RawEvent::TokenAmountTransferred(
-            token_id,
-            src_member_id,
+            DEFAULT_TOKEN_ID,
+            DEFAULT_ISSUER_MEMBER_ID,
             validated_outputs![
-                (Validated::<_>::Existing(dst1), amount1, None, None),
-                (Validated::<_>::NonExisting(dst2), amount2, None, None)
+                (
+                    Validated::<_>::Existing(FIRST_USER_MEMBER_ID),
+                    DEFAULT_USER_BALANCE,
+                    None,
+                    None
+                ),
+                (
+                    Validated::<_>::NonExisting(SECOND_USER_MEMBER_ID),
+                    DEFAULT_USER_BALANCE,
+                    None,
+                    None
+                )
             ],
             b"metadata".to_vec()
         ));
@@ -602,75 +349,56 @@ fn multiout_transfer_ok_with_event_deposit() {
 
 #[test]
 fn transfer_ok_and_source_left_with_zero_token_balance() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2);
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_info, src_member_id, src_balance)
-        .with_account(dst1, ConfigAccountData::default())
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
+        TransferFixture::new()
+            .with_multioutput_and_same_amount(
+                DEFAULT_ISSUER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE / 2,
+            )
+            .run();
 
-    build_test_externalities(config).execute_with(|| {
-        let _ = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
-
-        assert_ok!(
-            Token::ensure_account_data_exists(token_id, &src_member_id)
-                .map(|info| info.transferrable::<Test>(System::block_number())),
-            balance!(0),
+        assert!(
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID)
+                .unwrap()
+                .transferrable::<Test>(System::block_number())
+                .is_zero()
         );
     })
 }
 
 #[test]
 fn multiout_transfer_fails_with_source_having_insufficient_balance() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2 - 1);
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_info, src_member_id, src_balance)
-        .with_account(dst1, ConfigAccountData::default())
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
+        let result = TransferFixture::new()
+            .with_multioutput_and_same_amount(
+                DEFAULT_ISSUER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+            )
+            .execute_call();
 
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get());
-
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
-
-        assert_noop!(result, Error::<Test>::InsufficientTransferrableBalance);
+        assert_err!(result, Error::<Test>::InsufficientTransferrableBalance);
     })
 }
 
 #[test]
 fn multiout_transfer_ok_with_same_source_and_destination() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let ((dst1_member_id, dst1_acc), amount1) = (member!(2), balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let outputs = outputs![(dst1_member_id, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_users();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_info, dst1_member_id, amount1 + amount2)
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(origin!(dst1_acc), dst1_member_id, token_id, outputs, vec![]);
+        let result = TransferFixture::new()
+            .with_multioutput_and_same_amount(
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE / 2,
+            )
+            .execute_call();
 
         assert_ok!(result);
     })
@@ -678,39 +406,31 @@ fn multiout_transfer_ok_with_same_source_and_destination() {
 
 #[test]
 fn multiout_transfer_ok_with_new_destinations_created() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (dst1, amount1) = (member!(2).0, balance!(100));
-    let (dst2, amount2) = (member!(3).0, balance!(100));
-    let ((src_member_id, src_acc), src_balance, bloat_bond) =
-        (member!(1), amount1 + amount2, joy!(100));
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_bloat_bond(bloat_bond)
-        .with_token_and_owner(token_id, token_info, src_member_id, src_balance)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + 2 * bloat_bond);
-
-        let _ = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
+        TransferFixture::new()
+            .with_sender(DEFAULT_ISSUER_ACCOUNT_ID)
+            .with_src_member_id(DEFAULT_ISSUER_MEMBER_ID)
+            .with_multioutput_and_same_amount(
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+            )
+            .run();
 
         assert_ok!(
-            Token::ensure_account_data_exists(token_id, &dst1),
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID),
             AccountData::new_with_amount_and_bond(
-                amount1,
-                RepayableBloatBond::new(bloat_bond, None)
+                DEFAULT_USER_BALANCE,
+                RepayableBloatBond::new(DEFAULT_BLOAT_BOND, None)
             )
         );
-
         assert_ok!(
-            Token::ensure_account_data_exists(token_id, &dst2),
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &SECOND_USER_MEMBER_ID),
             AccountData::new_with_amount_and_bond(
-                amount2,
-                RepayableBloatBond::new(bloat_bond, None)
+                DEFAULT_USER_BALANCE,
+                RepayableBloatBond::new(DEFAULT_BLOAT_BOND, None)
             )
         );
     })
@@ -718,111 +438,84 @@ fn multiout_transfer_ok_with_new_destinations_created() {
 
 #[test]
 fn multiout_transfer_ok_with_bloat_bond_for_new_destinations_slashed_from_src() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), bloat_bond, src_balance) =
-        (member!(1), joy!(100), amount1 + amount2);
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        let balance_pre = Balances::usable_balance(&DEFAULT_ISSUER_ACCOUNT_ID);
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_info, src_member_id, src_balance)
-        .with_bloat_bond(bloat_bond)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + 2 * bloat_bond);
-
-        let _ = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
+        TransferFixture::new()
+            .with_sender(DEFAULT_ISSUER_ACCOUNT_ID)
+            .with_src_member_id(DEFAULT_ISSUER_MEMBER_ID)
+            .with_multioutput_and_same_amount(
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+            )
+            .run();
 
         assert_eq!(
-            Balances::usable_balance(&src_acc),
-            ExistentialDeposit::get()
+            Balances::usable_balance(&DEFAULT_ISSUER_ACCOUNT_ID),
+            balance_pre - 2 * DEFAULT_BLOAT_BOND
         );
     })
 }
 
 #[test]
 fn multiout_transfer_ok_with_bloat_bond_transferred_to_treasury() {
-    let token_id = token!(1);
-    let treasury = Token::module_treasury_account();
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance, bloat_bond) =
-        (member!(1), amount1 + amount2, joy!(100));
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        let treasury_balance_pre = Balances::usable_balance(&Token::module_treasury_account());
 
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_info, src_member_id, src_balance)
-        .with_bloat_bond(bloat_bond)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get() + 2 * bloat_bond);
-
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
-
-        assert_ok!(result);
+        TransferFixture::new()
+            .with_sender(DEFAULT_ISSUER_ACCOUNT_ID)
+            .with_src_member_id(DEFAULT_ISSUER_MEMBER_ID)
+            .with_multioutput_and_same_amount(
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+            )
+            .run();
 
         assert_eq!(
-            Balances::usable_balance(&treasury),
-            ExistentialDeposit::get() + 2 * bloat_bond
+            Balances::usable_balance(&Token::module_treasury_account()),
+            treasury_balance_pre + 2 * DEFAULT_BLOAT_BOND
         );
     })
 }
 
 #[test]
 fn transfer_ok_with_same_source_and_destination() {
-    let token_id = token!(1);
-    let token_info = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let ((dst_member_id, dst_acc), amount) = (member!(2), balance!(1));
-    let outputs = outputs![(dst_member_id, amount)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_MEMBER_ID, DEFAULT_BLOAT_BOND + ed());
+        let token_amount_pre =
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID)
+                .unwrap()
+                .transferrable::<Test>(System::block_number());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_info)
-        .with_account(dst_member_id, ConfigAccountData::new_with_amount(amount))
-        .build();
+        TransferFixture::new()
+            .with_output(FIRST_USER_MEMBER_ID, DEFAULT_USER_BALANCE)
+            .run();
 
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&dst_acc, ExistentialDeposit::get());
-
-        let result = Token::transfer(origin!(dst_acc), dst_member_id, token_id, outputs, vec![]);
-
-        assert_ok!(result);
+        let token_amount_post =
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID)
+                .unwrap()
+                .transferrable::<Test>(System::block_number());
+        assert_eq!(token_amount_pre, token_amount_post);
     })
 }
 
 #[test]
 fn permissioned_transfer_ok() {
-    let token_id = token!(1);
-    let ((src_member_id, src_acc), amount) = (member!(1), balance!(100));
-    let (dst1, dst2) = (member!(2).0, member!(3).0);
-    let commit = merkle_root![dst1, dst2];
-    let outputs = outputs![(dst1, amount)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_users_permissioned();
 
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(commit))
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_account(dst1, ConfigAccountData::default())
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get());
-
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
+        let result = TransferFixture::new()
+            .with_multioutput_and_same_amount(
+                DEFAULT_ISSUER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE / 2,
+            )
+            .execute_call();
 
         assert_ok!(result);
     })
@@ -830,835 +523,21 @@ fn permissioned_transfer_ok() {
 
 #[test]
 fn permissioned_transfer_ok_with_event_deposit() {
-    let token_id = token!(1);
-    let amount = balance!(100);
-    let (src_member_id, src_acc) = member!(1);
-    let (dst1, dst2) = (member!(2).0, member!(3).0);
-    let commit = merkle_root![dst1, dst2];
-    let outputs = outputs![(dst1, amount)];
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_users_permissioned();
 
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(commit))
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_account(dst1, ConfigAccountData::default())
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get());
-
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs.clone(),
-            b"metadata".to_vec(),
-        );
+        TransferFixture::new()
+            .with_output(SECOND_USER_MEMBER_ID, DEFAULT_USER_BALANCE)
+            .run();
 
         last_event_eq!(RawEvent::TokenAmountTransferred(
-            token_id,
-            src_member_id,
-            validated_outputs![(Validated::<_>::Existing(dst1), amount, None, None)],
-            b"metadata".to_vec()
-        ));
-    })
-}
-
-#[test]
-fn permissioned_transfer_fails_with_invalid_destination() {
-    let token_id = token!(1);
-    let amount = balance!(100);
-    let (src_member_id, src_acc) = member!(1);
-    let (dst1, dst2) = (member!(2).0, member!(3).0);
-    let commit = merkle_root![dst1, dst2];
-    let outputs = outputs![(dst1, amount)];
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(commit))
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
-
-        assert_noop!(result, Error::<Test>::AccountInformationDoesNotExist);
-    })
-}
-
-#[test]
-fn permissioned_multi_out_transfer_fails_with_invalid_destination() {
-    let token_id = token!(1);
-    let (dst1, amount1) = (member!(2).0, balance!(100));
-    let (dst2, amount2) = (member!(3).0, balance!(100));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2);
-    let commit = merkle_root![dst1, dst2];
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(commit))
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
-
-        assert_noop!(result, Error::<Test>::AccountInformationDoesNotExist);
-    })
-}
-
-#[test]
-fn permissioned_multi_out_transfer_fails_with_insufficient_balance() {
-    let token_id = token!(1);
-    let (dst1, amount1) = (member!(2).0, balance!(100));
-    let (dst2, amount2) = (member!(3).0, balance!(100));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2 - 1);
-    let commit = merkle_root![dst1, dst2];
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(commit))
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .with_account(dst1, ConfigAccountData::default())
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, ExistentialDeposit::get());
-
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
-
-        assert_noop!(result, Error::<Test>::InsufficientTransferrableBalance);
-    })
-}
-
-#[test]
-fn permissioned_multi_out_transfer_ok() {
-    let token_id = token!(1);
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2);
-    let commit = merkle_root![dst1, dst2];
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(commit))
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_data)
-        .with_account(
-            src_member_id,
-            ConfigAccountData::new_with_amount(src_balance),
-        )
-        .with_account(dst1, ConfigAccountData::default())
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::transfer(origin!(src_acc), src_member_id, token_id, outputs, vec![]);
-
-        assert_ok!(result);
-    })
-}
-
-#[test]
-fn permissioned_multi_out_transfer_ok_with_event_deposit() {
-    let token_id = token!(1);
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, src_acc), src_balance) = (member!(1), amount1 + amount2);
-    let commit = merkle_root![dst1, dst2];
-    let outputs = outputs![(dst1, amount1), (dst2, amount2)];
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(commit))
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_data)
-        .with_account(
-            src_member_id,
-            ConfigAccountData::new_with_amount(src_balance),
-        )
-        .with_account(dst1, ConfigAccountData::default())
-        .with_account(dst2, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let _ = Token::transfer(
-            origin!(src_acc),
-            src_member_id,
-            token_id,
-            outputs.clone(),
-            b"metadata".to_vec(),
-        );
-
-        last_event_eq!(RawEvent::TokenAmountTransferred(
-            token_id,
-            src_member_id,
-            validated_outputs![
-                (Validated::<_>::Existing(dst1), amount1, None, None),
-                (Validated::<_>::Existing(dst2), amount2, None, None)
-            ],
-            b"metadata".to_vec()
-        ));
-    })
-}
-
-#[test]
-fn transfer_ok_with_invitation_locked_funds() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst1, dst2, dst3, amount) = (member!(2).0, member!(3).0, member!(4).0, balance!(100));
-    let bloat_bond = joy!(100);
-    let required_joy_balance = bloat_bond * 3 + ed();
-
-    let test_cases = [
-        (
-            ed(),               // locked_amount
-            (None, None, None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + 1,                    // locked_amount
-            (Some(src_acc), None, None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond,           // locked_amount
-            (Some(src_acc), None, None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond + 1,                // locked_amount
-            (Some(src_acc), Some(src_acc), None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond * 2,                // locked_amount
-            (Some(src_acc), Some(src_acc), None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond * 2 + 1,                     // locked_amount
-            (Some(src_acc), Some(src_acc), Some(src_acc)), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond * 3,                         // locked_amount
-            (Some(src_acc), Some(src_acc), Some(src_acc)), // Expected bloat bond `restricted_to`
-        ),
-    ];
-
-    for case in test_cases {
-        let (locked_balance, expected_bloat_bond_restricted_to) = case;
-        let config = GenesisConfigBuilder::new_empty()
-            .with_token_and_owner(token_id, token_data.clone(), src_member_id, amount * 3)
-            .with_bloat_bond(bloat_bond)
-            .build();
-        build_test_externalities(config).execute_with(|| {
-            increase_account_balance(&src_acc, required_joy_balance);
-            set_invitation_lock(&src_acc, locked_balance);
-
-            assert_ok!(Token::transfer(
-                origin!(src_acc),
-                src_member_id,
-                token_id,
-                outputs![(dst1, amount), (dst2, amount), (dst3, amount)],
-                vec![]
-            ));
-
-            assert_eq!(
-                Balances::usable_balance(Token::module_treasury_account()),
-                required_joy_balance
-            );
-            assert_eq!(
-                System::account(src_acc).data,
-                balances::AccountData {
-                    free: ed(),
-                    reserved: 0,
-                    misc_frozen: locked_balance,
-                    fee_frozen: 0
-                }
-            );
-            assert_eq!(
-                Token::account_info_by_token_and_member(token_id, dst1).bloat_bond,
-                RepayableBloatBond::new(bloat_bond, expected_bloat_bond_restricted_to.0)
-            );
-            assert_eq!(
-                Token::account_info_by_token_and_member(token_id, dst2).bloat_bond,
-                RepayableBloatBond::new(bloat_bond, expected_bloat_bond_restricted_to.1)
-            );
-            assert_eq!(
-                Token::account_info_by_token_and_member(token_id, dst3).bloat_bond,
-                RepayableBloatBond::new(bloat_bond, expected_bloat_bond_restricted_to.2)
-            );
-        });
-    }
-}
-
-#[test]
-fn transfer_fails_with_insufficient_locked_funds() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
-    let bloat_bond = joy!(100);
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_bloat_bond(bloat_bond)
-        .build();
-
-    let required_joy_balance = ed() + bloat_bond;
-    let src_balance = required_joy_balance - 1;
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, src_balance);
-        set_invitation_lock(&src_acc, src_balance);
-
-        assert_noop!(
-            Token::transfer(
-                origin!(src_acc),
-                src_member_id,
-                token_id,
-                outputs![(dst, amount)],
-                vec![]
-            ),
-            Error::<Test>::InsufficientJoyBalance
-        );
-
-        // Increase balance by 1, but lock ED and those funds with another, not-allowed lock
-        increase_account_balance(&src_acc, 1);
-        set_staking_candidate_lock(&src_acc, ed() + 1);
-
-        assert_noop!(
-            Token::transfer(
-                origin!(src_acc),
-                src_member_id,
-                token_id,
-                outputs![(dst, amount)],
-                vec![]
-            ),
-            Error::<Test>::InsufficientJoyBalance
-        );
-    });
-}
-
-#[test]
-fn transfer_fails_with_incompatible_locked_funds() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
-    let bloat_bond = joy!(100);
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_bloat_bond(bloat_bond)
-        .build();
-
-    let required_joy_balance = ed() + bloat_bond;
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, required_joy_balance);
-        set_staking_candidate_lock(&src_acc, required_joy_balance);
-
-        assert_noop!(
-            Token::transfer(
-                origin!(src_acc),
-                src_member_id,
-                token_id,
-                outputs![(dst, amount)],
-                vec![]
-            ),
-            Error::<Test>::InsufficientJoyBalance
-        );
-    });
-}
-
-#[test]
-fn change_to_permissionless_fails_with_invalid_token_id() {
-    let token_id = token!(1);
-    let config = GenesisConfigBuilder::new_empty().build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::change_to_permissionless(token_id);
-
-        assert_noop!(result, Error::<Test>::TokenDoesNotExist);
-    })
-}
-
-#[test]
-fn change_to_permissionless_ok_from_permissioned_state() {
-    let token_id = token!(1);
-    let (dst1, amount1) = (member!(2).0, balance!(1));
-    let (dst2, amount2) = (member!(3).0, balance!(1));
-    let ((src_member_id, _), src_balance) = (member!(1), amount1 + amount2);
-    let commit = merkle_root![dst1, dst2];
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(commit))
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::change_to_permissionless(token_id);
-
-        assert_ok!(result);
-        assert!(matches!(
-            Token::token_info_by_id(token_id).transfer_policy,
-            TransferPolicyOf::<Test>::Permissionless
-        ));
-        last_event_eq!(RawEvent::TransferPolicyChangedToPermissionless(token_id));
-    })
-}
-
-#[test]
-fn change_to_permissionless_ok_from_permissionless_state() {
-    let token_id = token!(1);
-    let ((src_member_id, _), src_balance) = (member!(1), balance!(100));
-
-    let token_data = TokenDataBuilder::new_empty().build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::change_to_permissionless(token_id);
-
-        assert_ok!(result);
-        assert!(matches!(
-            Token::token_info_by_id(token_id).transfer_policy,
-            TransferPolicyOf::<Test>::Permissionless
-        ));
-        last_event_eq!(RawEvent::TransferPolicyChangedToPermissionless(token_id));
-    })
-}
-
-// Issuer transfers
-
-#[test]
-fn issuer_transfer_fails_with_non_existing_token() {
-    let token_id = token!(1);
-    let config = GenesisConfigBuilder::new_empty().build();
-    let (src_member_id, bloat_bond_payer) = member!(1);
-    let out = issuer_outputs![(member!(2).0, balance!(1), None)];
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::issuer_transfer(token_id, src_member_id, bloat_bond_payer, out, vec![]);
-
-        assert_noop!(result, Error::<Test>::TokenDoesNotExist);
-    })
-}
-
-#[test]
-fn issuer_transfer_fails_with_non_existing_source() {
-    let token_id = token!(1);
-    let (src_member_id, bloat_bond_payer) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_data)
-        .with_account(dst, ConfigAccountData::new_with_amount(amount))
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::issuer_transfer(
-            token_id,
-            src_member_id,
-            bloat_bond_payer,
-            issuer_outputs![(dst, amount, None)],
-            vec![],
-        );
-
-        assert_noop!(result, Error::<Test>::AccountInformationDoesNotExist);
-    })
-}
-
-#[test]
-fn issuer_transfer_fails_with_non_existing_dst_member() {
-    let token_id = token!(1);
-    let (src_member_id, src_account_id) = member!(1);
-    let (dst, amount) = (member!(9999).0, balance!(100));
-
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token(token_id, token_data)
-        .with_account(src_member_id, ConfigAccountData::new_with_amount(amount))
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::issuer_transfer(
-            token_id,
-            src_member_id,
-            src_account_id,
-            issuer_outputs![(dst, amount, None)],
-            vec![],
-        );
-
-        assert_noop!(result, Error::<Test>::TransferDestinationMemberDoesNotExist);
-    })
-}
-
-#[test]
-fn issuer_transfer_fails_with_src_having_insufficient_funds_for_bloat_bond() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, bloat_bond_payer) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
-    let bloat_bond = joy!(100);
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_bloat_bond(bloat_bond)
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(
-            &bloat_bond_payer,
-            ExistentialDeposit::get() + bloat_bond - 1,
-        );
-
-        let result = Token::issuer_transfer(
-            token_id,
-            src_member_id,
-            bloat_bond_payer,
-            issuer_outputs![(dst, amount, None)],
-            vec![],
-        );
-
-        assert_noop!(result, Error::<Test>::InsufficientJoyBalance);
-    })
-}
-
-#[test]
-fn issuer_permissioned_token_transfer_fails_with_source_not_having_sufficient_free_balance() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(Hashing::hash_of(b"default")))
-        .build();
-    let (dst, amount) = (member!(1).0, balance!(100));
-    let ((src_member_id, bloat_bond_payer), src_balance) = (member!(2), amount - balance!(1));
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .with_account(dst, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::issuer_transfer(
-            token_id,
-            src_member_id,
-            bloat_bond_payer,
-            issuer_outputs![(dst, amount, None)],
-            vec![],
-        );
-
-        assert_noop!(result, Error::<Test>::InsufficientTransferrableBalance);
-    })
-}
-
-#[test]
-fn issuer_permissioned_token_transfer_fails_with_dst_vesting_schedules_limit_exceeded() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(Hashing::hash_of(b"default")))
-        .build();
-    let ((src_member_id, bloat_bond_payer), dst, amount) =
-        (member!(1), member!(2).0, balance!(100));
-    let out = issuer_outputs![(
-        dst,
-        amount,
-        Some(VestingScheduleParams {
-            blocks_before_cliff: 100,
-            cliff_amount_percentage: Permill::from_percent(50),
-            linear_vesting_duration: 100
-        })
-    )];
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_account(
-            dst,
-            ConfigAccountData::default().with_max_vesting_schedules(default_vesting_schedule()),
-        )
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        let result = Token::issuer_transfer(token_id, src_member_id, bloat_bond_payer, out, vec![]);
-
-        assert_noop!(
-            result,
-            Error::<Test>::MaxVestingSchedulesPerAccountPerTokenReached
-        );
-    })
-}
-
-#[test]
-fn issuer_permissioned_token_transfer_ok() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(Hashing::hash_of(b"default")))
-        .build();
-    let (src_member_id, bloat_bond_payer) = member!(1);
-    let (dst1, dst2, dst3, dst4) = (member!(2).0, member!(3).0, member!(4).0, member!(5).0);
-    let (amount1, amount2, amount3, amount4) =
-        (balance!(100), balance!(200), balance!(300), balance!(400));
-    let (vesting1, vesting2, vesting3, vesting4) = (
-        None,
-        Some(VestingScheduleParams {
-            blocks_before_cliff: 100,
-            cliff_amount_percentage: Permill::from_percent(10),
-            linear_vesting_duration: 100,
-        }),
-        None,
-        Some(VestingScheduleParams {
-            blocks_before_cliff: 200,
-            cliff_amount_percentage: Permill::from_percent(20),
-            linear_vesting_duration: 200,
-        }),
-    );
-    let balance_existing = balance!(1000);
-    let bloat_bond_existing = joy!(200);
-    let bloat_bond_new = joy!(100);
-    let src_balance = amount1 + amount2 + amount3 + amount4;
-    let total_supply = src_balance + balance_existing * 2;
-    let treasury = Token::module_treasury_account();
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_bloat_bond(bloat_bond_new)
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .with_account(
-            dst3,
-            ConfigAccountData::new_with_amount_and_bond(
-                balance_existing,
-                RepayableBloatBond::new(bloat_bond_existing, None),
-            ),
-        )
-        .with_account(
-            dst4,
-            ConfigAccountData::new_with_amount_and_bond(
-                balance_existing,
-                RepayableBloatBond::new(bloat_bond_existing, None),
-            ),
-        )
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(
-            &bloat_bond_payer,
-            ExistentialDeposit::get() + bloat_bond_new * 2,
-        );
-
-        // Call succeeds
-        assert_ok!(Token::issuer_transfer(
-            token_id,
-            src_member_id,
-            bloat_bond_payer,
-            issuer_outputs![
-                (dst1, amount1, vesting1.clone()),
-                (dst2, amount2, vesting2.clone()),
-                (dst3, amount3, vesting3.clone()),
-                (dst4, amount4, vesting4.clone())
-            ],
-            b"metadata".to_vec()
-        ));
-
-        // New accounts created
-        assert_ok!(
-            Token::ensure_account_data_exists(token_id, &dst1),
-            AccountData {
-                // Explicitly check next_vesting_transfer_id
-                next_vesting_transfer_id: 0,
-                ..AccountData::new_with_amount_and_bond(
-                    amount1,
-                    RepayableBloatBond::new(bloat_bond_new, None)
-                )
-            }
-        );
-        assert_ok!(
-            Token::ensure_account_data_exists(token_id, &dst2),
-            AccountData {
-                // Explicitly check next_vesting_transfer_id
-                next_vesting_transfer_id: 1,
-                ..AccountData::new_with_vesting_and_bond::<Test>(
-                    VestingSource::IssuerTransfer(0),
-                    VestingSchedule::from_params(
-                        System::block_number(),
-                        amount2,
-                        vesting2.clone().unwrap()
-                    ),
-                    RepayableBloatBond::new(bloat_bond_new, None)
-                )
-                .unwrap()
-            }
-        );
-
-        // Existing account recieved funds
-        assert_ok!(
-            Token::ensure_account_data_exists(token_id, &dst3),
-            AccountData {
-                // Explicitly check next_vesting_transfer_id
-                next_vesting_transfer_id: 0,
-                ..AccountData::new_with_amount_and_bond(
-                    amount3 + balance_existing,
-                    RepayableBloatBond::new(bloat_bond_existing, None)
-                )
-            }
-        );
-        assert_ok!(
-            Token::ensure_account_data_exists(token_id, &dst4),
-            AccountData {
-                // Explicitly check next_vesting_transfer_id
-                next_vesting_transfer_id: 1,
-                amount: balance_existing + amount4,
-                vesting_schedules: [(
-                    VestingSource::IssuerTransfer(0),
-                    VestingSchedule::from_params(
-                        System::block_number(),
-                        amount4,
-                        vesting4.clone().unwrap()
-                    ),
-                )]
-                .iter()
-                .cloned()
-                .collect::<BTreeMap<_, _>>()
-                .try_into()
-                .unwrap(),
-                bloat_bond: RepayableBloatBond::new(bloat_bond_existing, None),
-                ..Default::default()
-            }
-        );
-
-        // Src funds decreased
-        assert_ok!(
-            Token::ensure_account_data_exists(token_id, &src_member_id),
-            AccountData::new_with_amount(0)
-        );
-
-        // Token supply unchanged
-        assert_eq!(Token::token_info_by_id(token_id).total_supply, total_supply);
-
-        // Token accounts number is valid
-        assert_eq!(Token::token_info_by_id(token_id).accounts_number, 5u64);
-
-        // Bloat bond transferred from bloat_bond_payer
-        assert_eq!(
-            Balances::usable_balance(&bloat_bond_payer),
-            ExistentialDeposit::get()
-        );
-
-        // Bloat bond transferred into treasury account
-        assert_eq!(
-            Balances::usable_balance(&treasury),
-            bloat_bond_new * 2 + ExistentialDeposit::get(), // treasury initial balance = Existential deposit
-        );
-
-        // Event deposited
-        last_event_eq!(RawEvent::TokenAmountTransferredByIssuer(
-            token_id,
-            src_member_id,
-            validated_outputs![
-                (Validated::<_>::NonExisting(dst1), amount1, vesting1, None),
-                (Validated::<_>::NonExisting(dst2), amount2, vesting2, None),
-                (Validated::<_>::Existing(dst3), amount3, vesting3, None),
-                (Validated::<_>::Existing(dst4), amount4, vesting4, None)
-            ],
-            b"metadata".to_vec()
-        ));
-    })
-}
-
-#[test]
-fn issuer_multiple_permissioned_token_transfers_ok_with_vesting_cleanup_executed() {
-    let max_vesting_schedules = <Test as Config>::MaxVestingSchedulesPerAccountPerToken::get();
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissioned(Hashing::hash_of(b"default")))
-        .build();
-    let ((src_member_id, bloat_bond_payer), dst, amount) =
-        (member!(1), member!(2).0, balance!(100));
-    let vesting = Some(VestingScheduleParams {
-        blocks_before_cliff: 100,
-        cliff_amount_percentage: Permill::from_percent(50),
-        linear_vesting_duration: 100,
-    });
-    let out = issuer_outputs![(dst, amount, vesting.clone())];
-    let src_balance = amount.saturating_mul((max_vesting_schedules + 1).into());
-
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, src_balance)
-        .with_account(dst, ConfigAccountData::default())
-        .build();
-
-    build_test_externalities(config).execute_with(|| {
-        // Create max vesting schedules
-        for i in 0u64..max_vesting_schedules.into() {
-            assert_ok!(Token::issuer_transfer(
-                token_id,
-                src_member_id,
-                bloat_bond_payer,
-                out.clone(),
-                vec![]
-            ));
-            let dst_acc_data = Token::ensure_account_data_exists(token_id, &dst).unwrap();
-            assert_eq!(dst_acc_data.next_vesting_transfer_id, i + 1);
-        }
-        // Go to vesting end block
-        System::set_block_number(201);
-        assert_ok!(Token::issuer_transfer(
-            token_id,
-            src_member_id,
-            bloat_bond_payer,
-            out.clone(),
-            b"metadata".to_vec()
-        ));
-        let dst_acc_data = Token::ensure_account_data_exists(token_id, &dst).unwrap();
-        assert_eq!(
-            dst_acc_data.next_vesting_transfer_id,
-            1u64.saturating_add(max_vesting_schedules.into())
-        );
-        assert_eq!(
-            dst_acc_data.vesting_schedules.len() as u32,
-            max_vesting_schedules
-        );
-        last_event_eq!(RawEvent::TokenAmountTransferredByIssuer(
-            token_id,
-            src_member_id,
+            DEFAULT_TOKEN_ID,
+            FIRST_USER_MEMBER_ID,
             validated_outputs![(
-                Validated::<_>::Existing(dst),
-                amount,
-                vesting,
-                Some(VestingSource::IssuerTransfer(0))
+                Validated::<_>::Existing(SECOND_USER_MEMBER_ID),
+                DEFAULT_USER_BALANCE,
+                None,
+                None
             )],
             b"metadata".to_vec()
         ));
@@ -1666,143 +545,738 @@ fn issuer_multiple_permissioned_token_transfers_ok_with_vesting_cleanup_executed
 }
 
 #[test]
-fn issuer_transfer_ok_with_invitation_locked_funds() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst1, dst2, dst3, amount) = (member!(2).0, member!(3).0, member!(4).0, balance!(100));
-    let bloat_bond = joy!(100);
-    let required_joy_balance = bloat_bond * 3 + ed();
+fn permissioned_transfer_fails_with_invalid_destination() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user_permissioned();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND);
 
-    let test_cases = [
-        (
-            ed(),               // locked_amount
-            (None, None, None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + 1,                    // locked_amount
-            (Some(src_acc), None, None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond,           // locked_amount
-            (Some(src_acc), None, None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond + 1,                // locked_amount
-            (Some(src_acc), Some(src_acc), None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond * 2,                // locked_amount
-            (Some(src_acc), Some(src_acc), None), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond * 2 + 1,                     // locked_amount
-            (Some(src_acc), Some(src_acc), Some(src_acc)), // Expected bloat bond `restricted_to`
-        ),
-        (
-            ed() + bloat_bond * 3,                         // locked_amount
-            (Some(src_acc), Some(src_acc), Some(src_acc)), // Expected bloat bond `restricted_to`
-        ),
-    ];
+        let result = TransferFixture::new()
+            .with_output(SECOND_USER_MEMBER_ID, DEFAULT_USER_BALANCE)
+            .execute_call();
 
-    for case in test_cases {
-        let (locked_balance, expected_bloat_bond_restricted_to) = case;
-        let config = GenesisConfigBuilder::new_empty()
-            .with_token_and_owner(token_id, token_data.clone(), src_member_id, amount * 3)
-            .with_bloat_bond(bloat_bond)
-            .build();
-        build_test_externalities(config).execute_with(|| {
-            increase_account_balance(&src_acc, required_joy_balance);
-            set_invitation_lock(&src_acc, locked_balance);
-
-            assert_ok!(Token::issuer_transfer(
-                token_id,
-                src_member_id,
-                src_acc,
-                issuer_outputs![
-                    (dst1, amount, None),
-                    (dst2, amount, None),
-                    (dst3, amount, None)
-                ],
-                vec![]
-            ));
-
-            assert_eq!(
-                Balances::usable_balance(Token::module_treasury_account()),
-                required_joy_balance
-            );
-            assert_eq!(
-                System::account(src_acc).data,
-                balances::AccountData {
-                    free: ed(),
-                    reserved: 0,
-                    misc_frozen: locked_balance,
-                    fee_frozen: 0
-                }
-            );
-            assert_eq!(
-                Token::account_info_by_token_and_member(token_id, dst1).bloat_bond,
-                RepayableBloatBond::new(bloat_bond, expected_bloat_bond_restricted_to.0)
-            );
-            assert_eq!(
-                Token::account_info_by_token_and_member(token_id, dst2).bloat_bond,
-                RepayableBloatBond::new(bloat_bond, expected_bloat_bond_restricted_to.1)
-            );
-            assert_eq!(
-                Token::account_info_by_token_and_member(token_id, dst3).bloat_bond,
-                RepayableBloatBond::new(bloat_bond, expected_bloat_bond_restricted_to.2)
-            );
-        });
-    }
+        assert_err!(result, Error::<Test>::AccountInformationDoesNotExist);
+    })
 }
 
 #[test]
-fn issuer_transfer_fails_with_insufficient_locked_funds() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
-    let bloat_bond = joy!(100);
+fn permissioned_multi_out_transfer_fails_with_invalid_destination() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user_permissioned();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND);
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_bloat_bond(bloat_bond)
-        .build();
+        let result = TransferFixture::new()
+            .with_multioutput_and_same_amount(
+                DEFAULT_ISSUER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE / 2,
+            )
+            .execute_call();
 
-    let required_joy_balance = ed() + bloat_bond;
-    let src_balance = required_joy_balance - 1;
+        assert_err!(result, Error::<Test>::AccountInformationDoesNotExist);
+    })
+}
 
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, src_balance);
-        set_invitation_lock(&src_acc, src_balance);
+#[test]
+fn permissioned_multi_out_transfer_fails_with_insufficient_token_tranferrable_balance() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user_permissioned();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND);
 
-        assert_noop!(
-            Token::issuer_transfer(
-                token_id,
-                src_member_id,
-                src_acc,
-                issuer_outputs![(dst, amount, None)],
-                vec![]
-            ),
+        let result = TransferFixture::new()
+            .with_multioutput_and_same_amount(
+                DEFAULT_ISSUER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+            )
+            .execute_call();
+
+        assert_err!(result, Error::<Test>::InsufficientTransferrableBalance);
+    })
+}
+
+#[test]
+fn permissioned_multi_out_transfer_ok() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_users_permissioned();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND);
+
+        let result = TransferFixture::new()
+            .with_multioutput_and_same_amount(
+                DEFAULT_ISSUER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE / 2,
+            )
+            .execute_call();
+
+        assert_ok!(result);
+    })
+}
+
+#[test]
+fn permissioned_multi_out_transfer_ok_with_event_deposit() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_users_permissioned();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND);
+
+        TransferFixture::new()
+            .with_multioutput_and_same_amount(
+                DEFAULT_ISSUER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE / 2,
+            )
+            .run();
+
+        last_event_eq!(RawEvent::TokenAmountTransferred(
+            DEFAULT_TOKEN_ID,
+            FIRST_USER_MEMBER_ID,
+            validated_outputs![
+                (
+                    Validated::<_>::Existing(DEFAULT_ISSUER_MEMBER_ID),
+                    DEFAULT_USER_BALANCE / 2,
+                    None,
+                    None
+                ),
+                (
+                    Validated::<_>::Existing(SECOND_USER_MEMBER_ID),
+                    DEFAULT_USER_BALANCE / 2,
+                    None,
+                    None
+                )
+            ],
+            b"metadata".to_vec()
+        ));
+    })
+}
+
+#[test_case(ed(), (None,None,None); "just_ed")]
+#[test_case(ed() + 1 , (Some(DEFAULT_ISSUER_ACCOUNT_ID),None,None); "more_than_ed")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND , (Some(DEFAULT_ISSUER_ACCOUNT_ID),None,None); "ed_and_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND + 1, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),None); "more_than_ed_and_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND * 2, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),None); "ed_and_twice_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND * 2 + 1, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),Some(DEFAULT_ISSUER_ACCOUNT_ID)); "more_than_ed_and_twice_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND * 3, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),Some(DEFAULT_ISSUER_ACCOUNT_ID)); "ed_and_trice_bloat_bond")]
+fn transfer_ok_with_invitation_locked_funds(
+    locked_balance: JoyBalance,
+    expected_bloat_bond_restricted_to: (Option<AccountId>, Option<AccountId>, Option<AccountId>),
+) {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        set_invitation_lock(&DEFAULT_ISSUER_ACCOUNT_ID, locked_balance);
+
+        TransferFixture::new()
+            .with_sender(DEFAULT_ISSUER_ACCOUNT_ID)
+            .with_src_member_id(DEFAULT_ISSUER_MEMBER_ID)
+            .with_multioutput_and_same_amount(
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE / 2,
+            )
+            .run();
+
+        assert_eq!(
+            Balances::usable_balance(Token::module_treasury_account()),
+            3 * DEFAULT_BLOAT_BOND + ed()
+        );
+        assert_eq!(
+            System::account(DEFAULT_ISSUER_ACCOUNT_ID).data,
+            balances::AccountData {
+                free: ed(),
+                reserved: 0,
+                misc_frozen: locked_balance,
+                fee_frozen: 0
+            }
+        );
+        assert_eq!(
+            Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_MEMBER_ID)
+                .bloat_bond,
+            RepayableBloatBond::new(DEFAULT_BLOAT_BOND, expected_bloat_bond_restricted_to.0)
+        );
+        assert_eq!(
+            Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, SECOND_USER_MEMBER_ID)
+                .bloat_bond,
+            RepayableBloatBond::new(DEFAULT_BLOAT_BOND, expected_bloat_bond_restricted_to.1)
+        );
+    });
+}
+
+#[test]
+fn transfer_fails_with_insufficient_locked_funds() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND);
+        set_invitation_lock(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed() - 1);
+        let transfer_fixture = TransferFixture::new().with_multioutput_and_same_amount(
+            DEFAULT_ISSUER_MEMBER_ID,
+            SECOND_USER_MEMBER_ID,
+            DEFAULT_USER_BALANCE / 2,
+        );
+
+        let result_after_first_lock = transfer_fixture.execute_call();
+
+        assert_err!(
+            result_after_first_lock,
             Error::<Test>::InsufficientJoyBalance
         );
 
         // Increase balance by 1, but lock ED and those funds with another, not-allowed lock
-        increase_account_balance(&src_acc, 1);
-        set_staking_candidate_lock(&src_acc, ed() + 1);
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, 1);
+        set_staking_candidate_lock(&FIRST_USER_ACCOUNT_ID, ed() + 1);
 
-        assert_noop!(
-            Token::issuer_transfer(
-                token_id,
-                src_member_id,
-                src_acc,
-                issuer_outputs![(dst, amount, None)],
-                vec![]
-            ),
+        let result_after_second_lock = transfer_fixture.execute_call();
+
+        assert_err!(
+            result_after_second_lock,
+            Error::<Test>::InsufficientJoyBalance
+        );
+    });
+}
+
+#[test]
+fn transfer_fails_with_incompatible_locked_funds() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND);
+        set_staking_candidate_lock(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed() - 1);
+
+        let result = TransferFixture::new()
+            .with_multioutput_and_same_amount(
+                DEFAULT_ISSUER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE / 2,
+            )
+            .execute_call();
+
+        assert_err!(result, Error::<Test>::InsufficientJoyBalance);
+    });
+}
+
+#[test]
+fn change_to_permissionless_fails_with_invalid_token_id() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+
+        let result = ChangeToPermissionlessFixture::new()
+            .with_token_id(DEFAULT_TOKEN_ID + 1)
+            .execute_call();
+
+        assert_err!(result, Error::<Test>::TokenDoesNotExist);
+    })
+}
+
+#[test]
+fn change_to_permissionless_ok_from_permissioned_state() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only_permissioned();
+
+        let result = ChangeToPermissionlessFixture::new().execute_call();
+
+        assert_ok!(result);
+    })
+}
+
+// Issuer transfers
+
+#[test]
+fn issuer_transfer_fails_with_non_existing_token() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+
+        let result = IssuerTransferFixture::new()
+            .with_token_id(DEFAULT_TOKEN_ID + 1)
+            .execute_call();
+
+        assert_err!(result, Error::<Test>::TokenDoesNotExist);
+    })
+}
+
+#[test]
+fn issuer_transfer_fails_with_non_existing_source() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+
+        let result = IssuerTransferFixture::new()
+            .with_src_member_id(99999u64)
+            .execute_call();
+
+        assert_err!(result, Error::<Test>::AccountInformationDoesNotExist);
+    })
+}
+
+#[test]
+fn issuer_transfer_fails_with_destination_member_id_not_existing_in_the_membership_pallet() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+
+        let result = IssuerTransferFixture::new()
+            .with_outputs(new_issuer_transfers(vec![(
+                9999u64,
+                DEFAULT_USER_BALANCE,
+                None,
+            )]))
+            .execute_call();
+
+        assert_err!(result, Error::<Test>::TransferDestinationMemberDoesNotExist);
+    })
+}
+
+#[test]
+fn issuer_transfer_fails_with_src_not_having_enough_joys_for_bloat_bond() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        Balances::make_free_balance_be(&DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed() - 1);
+
+        let result = IssuerTransferFixture::new().execute_call();
+
+        assert_err!(result, Error::<Test>::InsufficientJoyBalance);
+    })
+}
+
+#[test_case(|| { TokenContext::with_issuer_only_permissioned() }; "given only issuer in permissioned mode")]
+#[test_case(|| { TokenContext::with_issuer_and_first_user_permissioned() }; "given issuer and first member permissioned")]
+fn issuer_permissioned_token_transfer_fails_with_source_not_having_enough_tokens(
+    either_issuer_only_or_issuer_with_first_user_permissioned: fn(),
+) {
+    build_default_test_externalities().execute_with(|| {
+        either_issuer_only_or_issuer_with_first_user_permissioned();
+        let issuer_balance =
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &DEFAULT_ISSUER_MEMBER_ID)
+                .unwrap()
+                .amount;
+
+        let result = IssuerTransferFixture::new()
+            .with_outputs(new_issuer_transfers(vec![(
+                FIRST_USER_MEMBER_ID,
+                issuer_balance + 1,
+                None,
+            )]))
+            .execute_call();
+
+        assert_err!(result, Error::<Test>::InsufficientTransferrableBalance);
+    })
+}
+
+#[test]
+fn issuer_permissioned_token_transfer_fails_with_dst_vesting_schedules_limit_exceeded() {
+    let max_vesting_schedules_num = MaxVestingSchedulesPerAccountPerToken::get();
+    let vesting = VestingScheduleParams {
+        blocks_before_cliff: 200,
+        cliff_amount_percentage: Permill::from_percent(20),
+        linear_vesting_duration: 200,
+    };
+    assert!(
+        DEFAULT_USER_BALANCE * (max_vesting_schedules_num as u128) <= DEFAULT_INITIAL_ISSUANCE,
+        "issuer balance too low"
+    );
+    build_default_test_externalities().execute_with(|| {
+        // Arrange
+        TokenContext::with_issuer_and_first_user();
+        // Create max vesting schedules
+        for _ in 0u64..max_vesting_schedules_num.into() {
+            IssuerTransferFixture::new()
+                .with_output(
+                    FIRST_USER_MEMBER_ID,
+                    DEFAULT_USER_BALANCE,
+                    Some(vesting.clone()),
+                )
+                .run();
+        }
+
+        // Act: try to add one extra vesting schedule
+        let result = IssuerTransferFixture::new()
+            .with_output(
+                FIRST_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+                Some(vesting.clone()),
+            )
+            .execute_call();
+
+        assert_err!(
+            result,
+            Error::<Test>::MaxVestingSchedulesPerAccountPerTokenReached
+        );
+    })
+}
+
+#[test_case(Some(
+VestingScheduleParams {
+        blocks_before_cliff: 100,
+        cliff_amount_percentage: Permill::from_percent(10),
+        linear_vesting_duration: 100,
+    }); "with_vesting_schedule")]
+#[test_case(None; "without_vesting_schedule")]
+fn issuer_transfer_ok_with_event_deposit_given_existing_user(
+    vesting: Option<VestingScheduleParams>,
+) {
+    assert!(DEFAULT_INITIAL_ISSUANCE >= 2 * DEFAULT_USER_BALANCE);
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+
+        IssuerTransferFixture::new()
+            .with_outputs(new_issuer_transfers(vec![(
+                FIRST_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+                vesting.clone(),
+            )]))
+            .run();
+
+        last_event_eq!(RawEvent::TokenAmountTransferredByIssuer(
+            DEFAULT_TOKEN_ID,
+            DEFAULT_ISSUER_MEMBER_ID,
+            validated_outputs![(
+                Validated::<_>::Existing(FIRST_USER_MEMBER_ID),
+                DEFAULT_USER_BALANCE,
+                vesting,
+                None
+            )],
+            b"metadata".to_vec()
+        ));
+    })
+}
+
+#[test_case(Some(
+VestingScheduleParams {
+        blocks_before_cliff: 100,
+        cliff_amount_percentage: Permill::from_percent(10),
+        linear_vesting_duration: 100,
+    }); "with_vesting_schedule")]
+#[test_case(None; "without_vesting_schedule")]
+fn issuer_transfer_ok_with_event_deposit_given_non_existing_user(
+    vesting: Option<VestingScheduleParams>,
+) {
+    assert!(DEFAULT_INITIAL_ISSUANCE >= 2 * DEFAULT_USER_BALANCE);
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+
+        IssuerTransferFixture::new()
+            .with_outputs(new_issuer_transfers(vec![(
+                FIRST_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+                vesting.clone(),
+            )]))
+            .run();
+
+        last_event_eq!(RawEvent::TokenAmountTransferredByIssuer(
+            DEFAULT_TOKEN_ID,
+            DEFAULT_ISSUER_MEMBER_ID,
+            validated_outputs![(
+                Validated::<_>::NonExisting(FIRST_USER_MEMBER_ID),
+                DEFAULT_USER_BALANCE,
+                vesting,
+                None
+            )],
+            b"metadata".to_vec()
+        ));
+    })
+}
+
+#[test]
+fn issuer_transfer_ok_with_token_supply_changed() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        let token_supply_pre = Token::token_info_by_id(DEFAULT_TOKEN_ID).total_supply;
+
+        IssuerTransferFixture::new().run();
+
+        assert_eq!(
+            Token::token_info_by_id(DEFAULT_TOKEN_ID).total_supply,
+            token_supply_pre
+        );
+    })
+}
+
+#[test]
+fn issuer_transfer_ok_with_src_funds_decreased() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
+        let src_funds_pre =
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &DEFAULT_ISSUER_MEMBER_ID)
+                .unwrap()
+                .amount;
+
+        IssuerTransferFixture::new().run();
+
+        assert_eq!(
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &DEFAULT_ISSUER_MEMBER_ID)
+                .unwrap()
+                .amount,
+            src_funds_pre - DEFAULT_USER_BALANCE,
+        );
+    })
+}
+
+#[test]
+fn issuer_transfer_ok_with_non_existing_destination_and_account_number_increased() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        let accounts_number_pre = Token::token_info_by_id(DEFAULT_TOKEN_ID).accounts_number;
+
+        IssuerTransferFixture::new().run();
+
+        assert_eq!(
+            Token::token_info_by_id(DEFAULT_TOKEN_ID).accounts_number,
+            accounts_number_pre + 1u64
+        );
+    })
+}
+
+#[test]
+fn issuer_transfer_ok_with_bloat_bond_deposited_into_tresury() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        let issuer_balance_pre = Balances::usable_balance(&DEFAULT_ISSUER_ACCOUNT_ID);
+        let treasury_balance_pre = Balances::usable_balance(&Token::module_treasury_account());
+
+        IssuerTransferFixture::new().run();
+
+        assert_eq!(
+            Balances::usable_balance(&DEFAULT_ISSUER_ACCOUNT_ID),
+            issuer_balance_pre - DEFAULT_BLOAT_BOND,
+            "issuer joy balance not decreased by bloat bond"
+        );
+        assert_eq!(
+            Balances::usable_balance(&Token::module_treasury_account()),
+            treasury_balance_pre + DEFAULT_BLOAT_BOND,
+            "treasury balance not increased by bloat bond"
+        );
+    })
+}
+
+#[test]
+fn issuer_transfer_ok_with_account_created_with_vesting() {
+    let vesting = VestingScheduleParams {
+        blocks_before_cliff: 100,
+        cliff_amount_percentage: Permill::from_percent(10),
+        linear_vesting_duration: 100,
+    };
+    build_default_test_externalities().execute_with(|| {
+        let account_data = AccountData {
+            next_vesting_transfer_id: 1,
+            ..AccountData::new_with_vesting_and_bond::<Test>(
+                VestingSource::IssuerTransfer(0),
+                VestingSchedule::from_params(
+                    System::block_number(),
+                    DEFAULT_USER_BALANCE,
+                    vesting.clone(),
+                ),
+                RepayableBloatBond::new(DEFAULT_BLOAT_BOND, None),
+            )
+            .unwrap()
+        };
+        TokenContext::with_issuer_only();
+
+        IssuerTransferFixture::new()
+            .with_outputs(new_issuer_transfers(vec![(
+                FIRST_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+                Some(vesting.clone()),
+            )]))
+            .run();
+
+        assert_eq!(
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap(),
+            account_data,
+        )
+    })
+}
+
+#[test]
+fn issuer_transfer_ok_with_vested_tranfer_and_existing_account() {
+    let vesting = VestingScheduleParams {
+        blocks_before_cliff: 100,
+        cliff_amount_percentage: Permill::from_percent(10),
+        linear_vesting_duration: 100,
+    };
+    build_default_test_externalities().execute_with(|| {
+        let mut account_data = AccountData {
+            next_vesting_transfer_id: 1,
+            ..AccountData::new_with_vesting_and_bond::<Test>(
+                VestingSource::IssuerTransfer(0),
+                VestingSchedule::from_params(
+                    System::block_number(),
+                    DEFAULT_USER_BALANCE,
+                    vesting.clone(),
+                ),
+                RepayableBloatBond::new(DEFAULT_BLOAT_BOND, None),
+            )
+            .unwrap()
+        };
+        account_data.amount += DEFAULT_USER_BALANCE;
+        TokenContext::with_issuer_and_first_user();
+
+        IssuerTransferFixture::new()
+            .with_outputs(new_issuer_transfers(vec![(
+                FIRST_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+                Some(vesting.clone()),
+            )]))
+            .run();
+
+        assert_eq!(
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap(),
+            account_data,
+        )
+    })
+}
+#[test_case(true; "given_existing_destination")]
+#[test_case(false; "given_non_existing_destination")]
+fn issuer_transfer_ok_with_non_vesting_transfer(existing_destination: bool) {
+    let amount = DEFAULT_USER_BALANCE
+        + if existing_destination {
+            DEFAULT_USER_BALANCE
+        } else {
+            0
+        };
+    build_default_test_externalities().execute_with(|| {
+        if existing_destination {
+            TokenContext::with_issuer_and_first_user()
+        } else {
+            TokenContext::with_issuer_only()
+        }
+
+        IssuerTransferFixture::new().run();
+
+        assert_eq!(
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap(),
+            AccountData::new_with_amount_and_bond(
+                amount,
+                RepayableBloatBond::new(DEFAULT_BLOAT_BOND, None)
+            )
+        )
+    })
+}
+
+#[test]
+fn issuer_multiple_permissioned_token_transfers_ok_with_vesting_cleanup_executed() {
+    let max_vesting_schedules_num = MaxVestingSchedulesPerAccountPerToken::get();
+    let vesting = VestingScheduleParams {
+        blocks_before_cliff: 200,
+        cliff_amount_percentage: Permill::from_percent(20),
+        linear_vesting_duration: 200,
+    };
+    assert!(DEFAULT_USER_BALANCE * (max_vesting_schedules_num as u128) <= DEFAULT_INITIAL_ISSUANCE);
+    build_default_test_externalities().execute_with(|| {
+        // Arrange
+        TokenContext::with_issuer_and_first_user();
+        // Create max vesting schedules
+        for i in 0u64..max_vesting_schedules_num.into() {
+            IssuerTransferFixture::new()
+                .with_output(
+                    FIRST_USER_MEMBER_ID,
+                    DEFAULT_USER_BALANCE,
+                    Some(vesting.clone()),
+                )
+                .run();
+            let dst_acc_data =
+                Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
+            assert_eq!(dst_acc_data.next_vesting_transfer_id, i + 1);
+        }
+        // Go to vesting end block
+        System::set_block_number(1 + vesting.blocks_before_cliff + vesting.linear_vesting_duration);
+
+        // Act
+        IssuerTransferFixture::new()
+            .with_output(
+                FIRST_USER_MEMBER_ID,
+                DEFAULT_USER_BALANCE,
+                Some(vesting.clone()),
+            )
+            .run();
+
+        // Assert
+        let dst_acc_data =
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
+        assert_eq!(
+            dst_acc_data.next_vesting_transfer_id,
+            1u64.saturating_add(max_vesting_schedules_num.into())
+        );
+        assert_eq!(
+            dst_acc_data.vesting_schedules.len() as u64,
+            max_vesting_schedules_num as u64
+        );
+        last_event_eq!(RawEvent::TokenAmountTransferredByIssuer(
+            DEFAULT_TOKEN_ID,
+            DEFAULT_ISSUER_MEMBER_ID,
+            validated_outputs![(
+                Validated::<_>::Existing(FIRST_USER_MEMBER_ID),
+                DEFAULT_USER_BALANCE,
+                Some(vesting),
+                Some(VestingSource::IssuerTransfer(0))
+            )],
+            b"metadata".to_vec()
+        ));
+    })
+}
+
+#[test_case(ed(), (None,None,None); "just_ed")]
+#[test_case(ed() + 1, (Some(DEFAULT_ISSUER_ACCOUNT_ID),None,None); "more_than_ed")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND, (Some(DEFAULT_ISSUER_ACCOUNT_ID),None,None); "ed_and_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND + 1, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),None); "more_than_ed_and_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND * 2, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),None); "ed_and_twice_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND * 2 + 1, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),Some(DEFAULT_ISSUER_ACCOUNT_ID)); "more_than_ed_and_twice_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND * 3, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),Some(DEFAULT_ISSUER_ACCOUNT_ID)); "ed_and_trice_bloat_bond")]
+fn issuer_transfer_ok_with_invitation_locked_funds_with_locked_balance(
+    locked_balance: Balance,
+    expected_bloat_bond_restricted_to: (Option<AccountId>, Option<AccountId>, Option<AccountId>),
+) {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        set_invitation_lock(&DEFAULT_ISSUER_ACCOUNT_ID, locked_balance);
+
+        IssuerTransferFixture::new()
+            .with_outputs(new_issuer_transfers(vec![
+                (FIRST_USER_MEMBER_ID, DEFAULT_USER_BALANCE, None),
+                (SECOND_USER_MEMBER_ID, DEFAULT_USER_BALANCE, None),
+            ]))
+            .run();
+
+        assert_eq!(
+            Balances::usable_balance(Token::module_treasury_account()),
+            3 * DEFAULT_BLOAT_BOND + ed()
+        );
+        assert_eq!(
+            System::account(DEFAULT_ISSUER_ACCOUNT_ID).data,
+            balances::AccountData {
+                free: ed(),
+                reserved: 0,
+                misc_frozen: locked_balance,
+                fee_frozen: 0
+            }
+        );
+        assert_eq!(
+            Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_MEMBER_ID)
+                .bloat_bond,
+            RepayableBloatBond::new(DEFAULT_BLOAT_BOND, expected_bloat_bond_restricted_to.0)
+        );
+        assert_eq!(
+            Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, SECOND_USER_MEMBER_ID)
+                .bloat_bond,
+            RepayableBloatBond::new(DEFAULT_BLOAT_BOND, expected_bloat_bond_restricted_to.1)
+        );
+    });
+}
+
+#[test]
+fn issuer_transfer_fails_with_insufficient_locked_funds() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        Balances::make_free_balance_be(&DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed() - 1);
+        set_invitation_lock(&DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed() - 1);
+
+        let result_after_first_lock = IssuerTransferFixture::new().execute_call();
+
+        assert_err!(
+            result_after_first_lock,
+            Error::<Test>::InsufficientJoyBalance
+        );
+
+        // Increase balance by 1, but lock ED and those funds with another, not-allowed lock
+        increase_account_balance(&DEFAULT_ISSUER_ACCOUNT_ID, 1);
+        set_staking_candidate_lock(&DEFAULT_ISSUER_ACCOUNT_ID, ed() + 1);
+
+        let result_after_second_lock = IssuerTransferFixture::new().execute_call();
+
+        assert_err!(
+            result_after_second_lock,
             Error::<Test>::InsufficientJoyBalance
         );
     });
@@ -1810,34 +1284,13 @@ fn issuer_transfer_fails_with_insufficient_locked_funds() {
 
 #[test]
 fn issuer_transfer_fails_with_incompatible_locked_funds() {
-    let token_id = token!(1);
-    let token_data = TokenDataBuilder::new_empty()
-        .with_transfer_policy(Policy::Permissionless)
-        .build();
-    let (src_member_id, src_acc) = member!(1);
-    let (dst, amount) = (member!(2).0, balance!(100));
-    let bloat_bond = joy!(100);
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        Balances::make_free_balance_be(&DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
+        set_staking_candidate_lock(&DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
 
-    let config = GenesisConfigBuilder::new_empty()
-        .with_token_and_owner(token_id, token_data, src_member_id, amount)
-        .with_bloat_bond(bloat_bond)
-        .build();
+        let result = IssuerTransferFixture::new().execute_call();
 
-    let required_joy_balance = ed() + bloat_bond;
-
-    build_test_externalities(config).execute_with(|| {
-        increase_account_balance(&src_acc, required_joy_balance);
-        set_staking_candidate_lock(&src_acc, required_joy_balance);
-
-        assert_noop!(
-            Token::issuer_transfer(
-                token_id,
-                src_member_id,
-                src_acc,
-                issuer_outputs![(dst, amount, None)],
-                vec![]
-            ),
-            Error::<Test>::InsufficientJoyBalance
-        );
+        assert_err!(result, Error::<Test>::InsufficientJoyBalance);
     });
 }

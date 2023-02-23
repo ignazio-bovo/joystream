@@ -1,9 +1,10 @@
 #![cfg(test)]
 
 use crate::tests::mock::*;
-use crate::tests::test_utils::new_transfers;
+// TODO remove test utils
+use crate::tests::test_utils::{new_issuer_transfers, new_transfers, TokenDataBuilder};
 use crate::traits::PalletToken;
-use crate::types::{AmmParams, TransferOutputsOf};
+use crate::types::{AmmParams, TransferOutputsOf, TransferWithVestingOutputsOf};
 use crate::{member, yearly_rate, YearlyRate};
 use derive_fixture::Fixture;
 use derive_new::new;
@@ -354,26 +355,50 @@ impl Fixture for ParticipateInSplitFixture {
 }
 
 #[derive(Fixture, new)]
+pub struct ChangeToPermissionlessFixture {
+    #[new(value = "DEFAULT_TOKEN_ID")]
+    token_id: TokenId,
+}
+
+impl Fixture for ChangeToPermissionlessFixture {
+    fn execute(&self) -> DispatchResult {
+        Token::change_to_permissionless(self.token_id)
+    }
+}
+
+#[derive(Fixture, new)]
 pub struct TransferFixture {
-    #[new(value = "DEFAULT_ISSUER_ACCOUNT_ID")]
+    #[new(value = "FIRST_USER_ACCOUNT_ID")]
     sender: AccountId,
 
     #[new(value = "DEFAULT_TOKEN_ID")]
     token_id: TokenId,
 
-    #[new(value = "DEFAULT_ISSUER_MEMBER_ID")]
+    #[new(value = "FIRST_USER_MEMBER_ID")]
     src_member_id: MemberId,
 
-    #[new(value = "new_transfers(vec![(FIRST_USER_MEMBER_ID, DEFAULT_USER_BALANCE)])")]
+    #[new(value = "new_transfers(vec![(SECOND_USER_MEMBER_ID, DEFAULT_USER_BALANCE)])")]
     outputs: TransferOutputsOf<Test>,
 
-    #[new(default)]
+    #[new(value = "b\"metadata\".to_vec()")]
     metadata: Vec<u8>,
 }
 
 impl TransferFixture {
     pub fn with_output(self, member_id: MemberId, amount: Balance) -> Self {
         self.with_outputs(new_transfers(vec![(member_id, amount)]))
+    }
+
+    pub fn with_multioutput_and_same_amount(
+        self,
+        first_dest: MemberId,
+        second_dest: MemberId,
+        amount: Balance,
+    ) -> Self {
+        self.with_outputs(new_transfers(vec![
+            (first_dest, amount),
+            (second_dest, amount),
+        ]))
     }
 }
 impl Fixture for TransferFixture {
@@ -382,6 +407,49 @@ impl Fixture for TransferFixture {
             Origin::signed(self.sender),
             self.src_member_id,
             self.token_id,
+            self.outputs.clone(),
+            self.metadata.clone(),
+        )
+    }
+}
+
+#[derive(Fixture, new)]
+pub struct IssuerTransferFixture {
+    #[new(value = "DEFAULT_ISSUER_ACCOUNT_ID")]
+    bloat_bond_payer: AccountId,
+
+    #[new(value = "DEFAULT_TOKEN_ID")]
+    token_id: TokenId,
+
+    #[new(value = "DEFAULT_ISSUER_MEMBER_ID")]
+    src_member_id: MemberId,
+
+    #[new(
+        value = "new_issuer_transfers(vec![(FIRST_USER_MEMBER_ID, DEFAULT_USER_BALANCE, None)])"
+    )]
+    outputs: TransferWithVestingOutputsOf<Test>,
+
+    #[new(value = "b\"metadata\".to_vec()")]
+    metadata: Vec<u8>,
+}
+
+impl IssuerTransferFixture {
+    pub fn with_output(
+        self,
+        member_id: MemberId,
+        amount: Balance,
+        vesting: Option<VestingScheduleParams>,
+    ) -> Self {
+        self.with_outputs(new_issuer_transfers(vec![(member_id, amount, vesting)]))
+    }
+}
+
+impl Fixture for IssuerTransferFixture {
+    fn execute(&self) -> DispatchResult {
+        Token::issuer_transfer(
+            self.token_id,
+            self.src_member_id,
+            self.bloat_bond_payer,
             self.outputs.clone(),
             self.metadata.clone(),
         )
@@ -595,5 +663,124 @@ impl Fixture for JoinWhitelistFixture {
             self.token_id,
             self.merkle_proof.clone(),
         )
+    }
+}
+
+#[derive(Fixture, new)]
+pub struct TokenContext {
+    #[new(value = "false")]
+    empty_allocation: bool,
+
+    #[new(default)]
+    first_user_balance: Option<Balance>,
+
+    #[new(default)]
+    first_user_vesting: Option<VestingScheduleParams>,
+
+    #[new(default)]
+    second_user_balance: Option<Balance>,
+
+    #[new(default)]
+    second_user_vesting: Option<VestingScheduleParams>,
+
+    #[new(default)]
+    permissioned_policy_with_members: Option<Vec<MemberId>>, // Some(vec![user1, user2 ]) -> Permissioned else Permissionless
+}
+
+impl TokenContext {
+    pub fn build(self) {
+        let issue_token_fixture = IssueTokenFixture::new();
+
+        let mut allocation = vec![];
+        if !self.empty_allocation {
+            allocation = vec![(
+                DEFAULT_ISSUER_MEMBER_ID,
+                TokenAllocation {
+                    amount: DEFAULT_INITIAL_ISSUANCE,
+                    vesting_schedule_params: None,
+                },
+            )];
+
+            if let Some(balance) = self.first_user_balance {
+                let first_user_allocation = TokenAllocation {
+                    amount: balance,
+                    vesting_schedule_params: self.first_user_vesting,
+                };
+                allocation.push((FIRST_USER_MEMBER_ID, first_user_allocation));
+            }
+
+            if let Some(balance) = self.second_user_balance {
+                let second_user_allocation = TokenAllocation {
+                    amount: balance,
+                    vesting_schedule_params: self.second_user_vesting,
+                };
+                allocation.push((SECOND_USER_MEMBER_ID, second_user_allocation));
+            }
+        }
+
+        let policy_params = if let Some(members) = self.permissioned_policy_with_members {
+            let commitment = generate_merkle_root_helper::<Test, _>(members.as_slice())
+                .pop()
+                .unwrap();
+            TransferPolicyParams::Permissioned(WhitelistParams {
+                commitment,
+                payload: None,
+            })
+        } else {
+            TransferPolicyParams::Permissionless
+        };
+
+        issue_token_fixture
+            .with_initial_allocation(allocation.into_iter().collect())
+            .with_transfer_policy_params(policy_params)
+            .run();
+    }
+
+    // some contexts
+    pub fn with_issuer_and_first_user() {
+        Self::new()
+            .with_first_user_balance(Some(DEFAULT_USER_BALANCE))
+            .build();
+    }
+
+    pub fn with_issuer_and_users() {
+        Self::new()
+            .with_first_user_balance(Some(DEFAULT_USER_BALANCE))
+            .with_second_user_balance(Some(DEFAULT_USER_BALANCE))
+            .build();
+    }
+
+    pub fn with_issuer_only() {
+        Self::new().build();
+    }
+
+    pub fn with_issuer_only_permissioned() {
+        Self::new()
+            .with_permissioned_policy_with_members(Some(vec![
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+            ]))
+            .build();
+    }
+
+    pub fn with_issuer_and_first_user_permissioned() {
+        Self::new()
+            .with_first_user_balance(Some(DEFAULT_USER_BALANCE))
+            .with_permissioned_policy_with_members(Some(vec![
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+            ]))
+            .build();
+    }
+
+    pub fn with_issuer_and_users_permissioned() {
+        Self::new()
+            .with_first_user_balance(Some(DEFAULT_USER_BALANCE))
+            .with_second_user_balance(Some(DEFAULT_USER_BALANCE))
+            .with_permissioned_policy_with_members(Some(vec![
+                FIRST_USER_MEMBER_ID,
+                SECOND_USER_MEMBER_ID,
+            ]))
+            .build();
     }
 }

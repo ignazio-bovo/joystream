@@ -1,9 +1,9 @@
 #![cfg(test)]
 use frame_support::{assert_err, assert_noop, assert_ok, StorageDoubleMap, StorageMap};
-use parameterized::parameterized;
 use sp_runtime::traits::Zero;
 use sp_runtime::DispatchError;
 use sp_runtime::{testing::H256, Permill};
+use test_case::test_case;
 
 use crate::tests::fixtures::*;
 use crate::tests::mock::*;
@@ -1190,27 +1190,13 @@ fn issue_token_ok_with_accounts_data_added() {
     })
 }
 
-#[parameterized(
-    locked_balance = {
-        ed(),
-        ed() + 1,
-        ed() + DEFAULT_BLOAT_BOND,
-        ed() + DEFAULT_BLOAT_BOND + 1,
-        ed() + DEFAULT_BLOAT_BOND * 2,
-        ed() + DEFAULT_BLOAT_BOND * 2 + 1,
-        ed() + DEFAULT_BLOAT_BOND * 3
-    },
-    expected_bloat_bond_restricted_to = {
-        (None,None,None),
-        (Some(DEFAULT_ISSUER_ACCOUNT_ID), None, None),
-        (Some(DEFAULT_ISSUER_ACCOUNT_ID), None, None),
-        (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID), None),
-        (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID), None),
-        (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID)),
-        (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID))
-    }
-
-)]
+#[test_case(ed(), (None,None,None); "just_ed")]
+#[test_case(ed() + 1 , (Some(DEFAULT_ISSUER_ACCOUNT_ID),None,None); "more_than_ed")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND , (Some(DEFAULT_ISSUER_ACCOUNT_ID),None,None); "ed_and_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND + 1, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),None); "more_than_ed_and_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND * 2, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),None); "ed_and_twice_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND * 2 + 1, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),Some(DEFAULT_ISSUER_ACCOUNT_ID)); "more_than_ed_and_twice_bloat_bond")]
+#[test_case(ed() + DEFAULT_BLOAT_BOND * 3, (Some(DEFAULT_ISSUER_ACCOUNT_ID), Some(DEFAULT_ISSUER_ACCOUNT_ID),Some(DEFAULT_ISSUER_ACCOUNT_ID)); "ed_and_trice_bloat_bond")]
 fn issue_token_ok_with_invitation_locked_funds(
     locked_balance: JoyBalance,
     expected_bloat_bond_restricted_to: (Option<AccountId>, Option<AccountId>, Option<AccountId>),
