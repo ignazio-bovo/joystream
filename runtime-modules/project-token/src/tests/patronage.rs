@@ -12,8 +12,8 @@ use crate::{balance, last_event_eq, Error, RawEvent};
 #[test]
 fn issue_token_ok_with_patronage_tally_count_zero() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(10u64.into())
+        IssueTokenFixture::new()
+            .with_initial_supply(10u64.into())
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
@@ -30,8 +30,8 @@ fn issue_token_ok_with_patronage_tally_count_zero() {
 #[test]
 fn issue_token_ok_with_correct_non_zero_patronage_accounting() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(DEFAULT_INITIAL_ISSUANCE)
+        IssueTokenFixture::new()
+            .with_initial_supply(DEFAULT_INITIAL_ISSUANCE)
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
@@ -49,7 +49,7 @@ fn issue_token_ok_with_correct_non_zero_patronage_accounting() {
 #[test]
 fn issue_token_ok_with_correct_patronage_accounting_and_zero_supply() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
+        IssueTokenFixture::new()
             .with_empty_allocation()
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
@@ -67,13 +67,13 @@ fn issue_token_ok_with_correct_patronage_accounting_and_zero_supply() {
 #[test]
 fn decrease_patronage_ok() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(100u64.into())
+        IssueTokenFixture::new()
+            .with_initial_supply(100u64.into())
             .with_patronage_rate(DEFAULT_MAX_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
 
-        let result = ReducePatronageRateToFixture::default()
+        let result = ReducePatronageRateToFixture::new()
             .with_target_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call();
 
@@ -84,14 +84,14 @@ fn decrease_patronage_ok() {
 #[test]
 fn decrease_patronage_ok_with_tally_count_correctly_updated() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(DEFAULT_INITIAL_ISSUANCE)
+        IssueTokenFixture::new()
+            .with_initial_supply(DEFAULT_INITIAL_ISSUANCE)
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
         increase_block_number_by(DEFAULT_BLOCK_INTERVAL);
 
-        ReducePatronageRateToFixture::default()
+        ReducePatronageRateToFixture::new()
             .with_target_rate(YearlyRate::zero())
             .execute_call()
             .unwrap();
@@ -108,12 +108,12 @@ fn decrease_patronage_ok_with_tally_count_correctly_updated() {
 #[test]
 fn decrease_patronage_ok_noop_with_current_patronage_rate_specified_as_target() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
+        IssueTokenFixture::new()
             .with_patronage_rate(DEFAULT_MAX_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
 
-        ReducePatronageRateToFixture::default()
+        ReducePatronageRateToFixture::new()
             .with_target_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
@@ -130,13 +130,13 @@ fn decrease_patronage_ok_noop_with_current_patronage_rate_specified_as_target() 
 #[test]
 fn decrease_patronage_ok_with_last_tally_block_updated() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
+        IssueTokenFixture::new()
             .with_patronage_rate(DEFAULT_MAX_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
         increase_block_number_by(DEFAULT_BLOCK_INTERVAL);
 
-        ReducePatronageRateToFixture::default()
+        ReducePatronageRateToFixture::new()
             .with_target_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
@@ -155,12 +155,12 @@ fn decrease_patronage_ok_with_last_tally_block_updated() {
 #[test]
 fn decreasing_patronage_rate_fails_with_target_rate_exceeding_current_rate() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
+        IssueTokenFixture::new()
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
 
-        let result = ReducePatronageRateToFixture::default()
+        let result = ReducePatronageRateToFixture::new()
             .with_target_rate(DEFAULT_MAX_YEARLY_PATRONAGE_RATE.into())
             .execute_call();
 
@@ -174,12 +174,12 @@ fn decreasing_patronage_rate_fails_with_target_rate_exceeding_current_rate() {
 #[test]
 fn decreasing_patronage_rate_fails_invalid_token() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
+        IssueTokenFixture::new()
             .with_patronage_rate(DEFAULT_MAX_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
 
-        let result = ReducePatronageRateToFixture::default()
+        let result = ReducePatronageRateToFixture::new()
             .with_token_id(DEFAULT_TOKEN_ID + 1u64)
             .execute_call();
 
@@ -194,14 +194,14 @@ fn claim_patronage_fails_with_active_revenue_split() {
         DEFAULT_SPLIT_REVENUE + ExistentialDeposit::get(),
     )])
     .execute_with(|| {
-        IssueTokenFixture::default()
+        IssueTokenFixture::new()
             .with_patronage_rate(DEFAULT_MAX_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
 
-        IssueRevenueSplitFixture::default().execute_call().unwrap(); // activate revenue split
+        IssueRevenueSplitFixture::new().execute_call().unwrap(); // activate revenue split
         increase_block_number_by(MIN_REVENUE_SPLIT_TIME_TO_START - 1);
-        let result = ClaimPatronageCreditFixture::default().execute_call();
+        let result = ClaimPatronageCreditFixture::new().execute_call();
 
         // expect it to fail even though the staking period is not started yet
         assert_err!(
@@ -214,14 +214,14 @@ fn claim_patronage_fails_with_active_revenue_split() {
 #[test]
 fn claim_patronage_ok() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
+        IssueTokenFixture::new()
             .with_patronage_rate(DEFAULT_MAX_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
 
         increase_block_number_by(DEFAULT_BLOCK_INTERVAL);
 
-        let result = ReducePatronageRateToFixture::default().execute_call();
+        let result = ReducePatronageRateToFixture::new().execute_call();
 
         assert_ok!(result);
     })
@@ -235,8 +235,8 @@ fn claim_patronage_ok_with_correct_credit_accounting_and_more_than_100_percent_s
         * (DEFAULT_INITIAL_ISSUANCE).saturated_into::<u32>() as f64)
         .trunc() as u128;
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(DEFAULT_INITIAL_ISSUANCE)
+        IssueTokenFixture::new()
+            .with_initial_supply(DEFAULT_INITIAL_ISSUANCE)
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
@@ -249,35 +249,29 @@ fn claim_patronage_ok_with_correct_credit_accounting_and_more_than_100_percent_s
             10 * BlocksPerYear::get().saturated_into::<u64>() + DEFAULT_BLOCK_INTERVAL + 1u64,
         );
 
-        ClaimPatronageCreditFixture::default()
-            .execute_call()
-            .unwrap();
+        ClaimPatronageCreditFixture::new().execute_call().unwrap();
 
         let issuer_amount_post =
             Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, DEFAULT_ISSUER_MEMBER_ID)
                 .transferrable::<Test>(System::block_number());
         assert_eq!(issuer_amount_post - issuer_amount_pre, expected_amount);
 
-        ClaimPatronageCreditFixture::default()
-            .execute_call()
-            .unwrap();
+        ClaimPatronageCreditFixture::new().execute_call().unwrap();
     })
 }
 
 #[test]
-fn claim_patronage_ok_with_supply_greater_than_u64_max_and_sufficient_precision() {
+fn claim_patronage_ok_with_initial_supply_greater_than_u64_max_and_sufficient_precision() {
     let big_supply = 1_000_000_000_000_000_000_000_000_000_000u128;
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(big_supply)
+        IssueTokenFixture::new()
+            .with_initial_supply(big_supply)
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
         increase_block_number_by(DEFAULT_BLOCK_INTERVAL);
 
-        ClaimPatronageCreditFixture::default()
-            .execute_call()
-            .unwrap();
+        ClaimPatronageCreditFixture::new().execute_call().unwrap();
 
         let approx =
             Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, DEFAULT_ISSUER_MEMBER_ID)
@@ -291,16 +285,14 @@ fn claim_patronage_ok_with_supply_greater_than_u64_max_and_sufficient_precision(
 #[test]
 fn claim_patronage_ok_with_event_deposit() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(DEFAULT_INITIAL_ISSUANCE)
+        IssueTokenFixture::new()
+            .with_initial_supply(DEFAULT_INITIAL_ISSUANCE)
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
         increase_block_number_by(DEFAULT_BLOCK_INTERVAL);
 
-        ClaimPatronageCreditFixture::default()
-            .execute_call()
-            .unwrap();
+        ClaimPatronageCreditFixture::new().execute_call().unwrap();
 
         last_event_eq!(RawEvent::PatronageCreditClaimed(
             DEFAULT_TOKEN_ID,
@@ -313,8 +305,8 @@ fn claim_patronage_ok_with_event_deposit() {
 #[test]
 fn claim_patronage_ok_with_credit_accounting() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(DEFAULT_INITIAL_ISSUANCE)
+        IssueTokenFixture::new()
+            .with_initial_supply(DEFAULT_INITIAL_ISSUANCE)
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
@@ -324,9 +316,7 @@ fn claim_patronage_ok_with_credit_accounting() {
 
         increase_block_number_by(DEFAULT_BLOCK_INTERVAL);
 
-        ClaimPatronageCreditFixture::default()
-            .execute_call()
-            .unwrap();
+        ClaimPatronageCreditFixture::new().execute_call().unwrap();
 
         let issuer_amount_post =
             Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, DEFAULT_ISSUER_MEMBER_ID)
@@ -341,17 +331,15 @@ fn claim_patronage_ok_with_credit_accounting() {
 #[test]
 fn claim_patronage_ok_with_unclaimed_patronage_reset() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(DEFAULT_INITIAL_ISSUANCE)
+        IssueTokenFixture::new()
+            .with_initial_supply(DEFAULT_INITIAL_ISSUANCE)
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
 
         increase_block_number_by(DEFAULT_BLOCK_INTERVAL);
 
-        ClaimPatronageCreditFixture::default()
-            .execute_call()
-            .unwrap();
+        ClaimPatronageCreditFixture::new().execute_call().unwrap();
 
         assert!(Token::token_info_by_id(DEFAULT_TOKEN_ID)
             .unclaimed_patronage_at_block::<BlocksPerYear>(System::block_number())
@@ -362,7 +350,7 @@ fn claim_patronage_ok_with_unclaimed_patronage_reset() {
 #[test]
 fn claim_patronage_credit_fails_with_invalid_token_id() {
     build_default_test_externalities().execute_with(|| {
-        let result = ClaimPatronageCreditFixture::default()
+        let result = ClaimPatronageCreditFixture::new()
             .with_token_id(DEFAULT_TOKEN_ID)
             .execute_call();
 
@@ -373,9 +361,9 @@ fn claim_patronage_credit_fails_with_invalid_token_id() {
 #[test]
 fn claim_patronage_credit_fails_with_invalid_owner() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default().execute_call().unwrap();
+        IssueTokenFixture::new().execute_call().unwrap();
 
-        let result = ClaimPatronageCreditFixture::default()
+        let result = ClaimPatronageCreditFixture::new()
             .with_member_id(MemberId::zero())
             .execute_call();
 
@@ -386,16 +374,14 @@ fn claim_patronage_credit_fails_with_invalid_owner() {
 #[test]
 fn claim_patronage_ok_with_tally_amount_set_to_zero() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::default()
-            .with_supply(DEFAULT_INITIAL_ISSUANCE)
+        IssueTokenFixture::new()
+            .with_initial_supply(DEFAULT_INITIAL_ISSUANCE)
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
             .execute_call()
             .unwrap();
         increase_block_number_by(DEFAULT_BLOCK_INTERVAL);
 
-        ClaimPatronageCreditFixture::default()
-            .execute_call()
-            .unwrap();
+        ClaimPatronageCreditFixture::new().execute_call().unwrap();
 
         assert!(Token::token_info_by_id(DEFAULT_TOKEN_ID)
             .patronage_info

@@ -43,6 +43,14 @@ pub fn default_upload_context() -> UploadContext {
     }
 }
 
+pub fn default_vesting_schedule_params() -> VestingScheduleParams {
+    VestingScheduleParams {
+        linear_vesting_duration: 100u64.into(),
+        blocks_before_cliff: 0u64.into(),
+        cliff_amount_percentage: Permill::from_percent(10),
+    }
+}
+
 pub fn issuer_allocation(amount: Balance) -> BTreeMap<MemberId, TokenAllocation> {
     BTreeMap::from_iter(vec![(
         DEFAULT_ISSUER_MEMBER_ID,
@@ -181,20 +189,49 @@ pub struct InitTokenSaleFixture {
     #[new(value = "DEFAULT_SALE_UNIT_PRICE")]
     unit_price: Balance,
 
-    #[new(default)]
-    blocks_before_cliff: BlockNumber,
-
     #[new(value = "DEFAULT_INITIAL_ISSUANCE")]
     upper_bound_quantity: Balance,
-
-    #[new(value = "Permill::zero()")]
-    cliff_amount_percentage: Permill,
 
     #[new(default)]
     metadata: Option<Vec<u8>>,
 
-    #[new(value = "100u32.into()")]
-    linear_vesting_duration: BlockNumber,
+    #[new(default)]
+    vesting_schedule_params: Option<VestingScheduleParams>,
+}
+
+impl InitTokenSaleFixture {
+    pub fn with_linear_vesting_duration(self, duration: BlockNumber) -> Self {
+        let vesting = self.vesting_schedule_params;
+        Self {
+            vesting_schedule_params: Some(VestingScheduleParams {
+                linear_vesting_duration: duration,
+                ..vesting.unwrap_or(default_vesting_schedule_params())
+            }),
+            ..self
+        }
+    }
+
+    pub fn with_vesting_blocks_before_cliff(self, cliff_blocks: BlockNumber) -> Self {
+        let vesting = self.vesting_schedule_params;
+        Self {
+            vesting_schedule_params: Some(VestingScheduleParams {
+                blocks_before_cliff: cliff_blocks,
+                ..vesting.unwrap_or(default_vesting_schedule_params())
+            }),
+            ..self
+        }
+    }
+
+    pub fn with_cliff_amount_percentage(self, percent: Permill) -> Self {
+        let vesting = self.vesting_schedule_params;
+        Self {
+            vesting_schedule_params: Some(VestingScheduleParams {
+                cliff_amount_percentage: percent,
+                ..vesting.unwrap_or(default_vesting_schedule_params())
+            }),
+            ..self
+        }
+    }
 }
 
 impl Fixture for InitTokenSaleFixture {
@@ -205,11 +242,7 @@ impl Fixture for InitTokenSaleFixture {
             starts_at: self.start_block,
             unit_price: self.unit_price,
             upper_bound_quantity: self.upper_bound_quantity,
-            vesting_schedule_params: Some(VestingScheduleParams {
-                blocks_before_cliff: self.blocks_before_cliff,
-                linear_vesting_duration: self.linear_vesting_duration,
-                cliff_amount_percentage: self.cliff_amount_percentage,
-            }),
+            vesting_schedule_params: self.vesting_schedule_params.clone(),
             cap_per_member: self.cap_per_member,
         };
         Token::init_token_sale(
@@ -631,12 +664,12 @@ pub struct ReducePatronageRateToFixture {
     token_id: TokenId,
 
     #[new(value = "DEFAULT_YEARLY_PATRONAGE_RATE.into()")]
-    rate: YearlyRate,
+    target_rate: YearlyRate,
 }
 
 impl Fixture for ReducePatronageRateToFixture {
     fn execute(&self) -> DispatchResult {
-        Token::reduce_patronage_rate_to(self.token_id, self.rate)
+        Token::reduce_patronage_rate_to(self.token_id, self.target_rate)
     }
 }
 
