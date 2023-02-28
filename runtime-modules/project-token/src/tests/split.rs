@@ -53,7 +53,7 @@ fn issue_split_fails_with_duration_too_short() {
 #[test]
 fn issue_split_fails_with_source_having_insufficient_balance() {
     build_externalities_for_split().execute_with(|| {
-        IssueTokenFixture::new().run();
+        TokenContext::with_issuer_and_first_user();
 
         let result = IssueRevenueSplitFixture::new()
             .with_revenue_amount(
@@ -71,7 +71,7 @@ fn issue_split_fails_with_non_existing_source() {
         IssueTokenFixture::new().run();
 
         let result = IssueRevenueSplitFixture::new()
-            .with_revenue_source_account(member!(2).1)
+            .with_revenue_source_account(FIRST_USER_ACCOUNT_ID)
             .execute_call();
 
         assert_err!(result, Error::<Test>::InsufficientJoyBalance,);
@@ -274,6 +274,8 @@ fn finalize_split_ok_with_token_status_set_to_inactive() {
 
 #[test]
 fn finalize_split_ok_with_leftover_joys_transferred_to_account() {
+    let treasury_leftovers =
+        DEFAULT_SPLIT_RATE.mul_floor(DEFAULT_SPLIT_REVENUE) - DEFAULT_SPLIT_JOY_DIVIDEND;
     build_externalities_for_split().execute_with(|| {
         TokenContext::with_issuer_and_first_user();
         IssueRevenueSplitFixture::new().run();
@@ -282,19 +284,18 @@ fn finalize_split_ok_with_leftover_joys_transferred_to_account() {
         increase_block_number_by(DEFAULT_SPLIT_DURATION);
         let treasury_balance_pre = Balances::usable_balance(Token::module_treasury_account());
         let issuer_balance_pre = Balances::usable_balance(DEFAULT_ISSUER_ACCOUNT_ID);
-        let variation = DEFAULT_SPLIT_REVENUE - DEFAULT_SPLIT_JOY_DIVIDEND;
 
         FinalizeRevenueSplitFixture::new().run();
 
         // treasury account final balance == Existential deposit
         assert_eq!(
             Balances::usable_balance(Token::module_treasury_account()),
-            treasury_balance_pre - variation
+            treasury_balance_pre - treasury_leftovers
         );
         // account id balance increased by DEFAULT_SPLIT_REVENUE - DEFAULT_SPLIT_JOY_DIVIDEND
         assert_eq!(
             Balances::usable_balance(DEFAULT_ISSUER_ACCOUNT_ID),
-            issuer_balance_pre + variation
+            issuer_balance_pre + treasury_leftovers
         );
     })
 }
@@ -329,8 +330,8 @@ fn participate_in_split_fails_with_non_existing_account() {
         increase_block_number_by(MIN_REVENUE_SPLIT_TIME_TO_START);
 
         let result = ParticipateInSplitFixture::new()
-            .with_sender(member!(3).1)
-            .with_member_id(member!(3).0)
+            .with_sender(SECOND_USER_ACCOUNT_ID)
+            .with_member_id(SECOND_USER_MEMBER_ID)
             .execute_call();
 
         assert_err!(result, Error::<Test>::AccountInformationDoesNotExist);
@@ -412,11 +413,7 @@ fn participate_in_split_fails_with_revenue_not_started_yet() {
 
 #[test]
 fn participate_in_split_fails_with_user_already_a_participant() {
-    build_default_test_externalities_with_balances(vec![(
-        DEFAULT_ISSUER_ACCOUNT_ID,
-        DEFAULT_SPLIT_REVENUE + ed() + DEFAULT_BLOAT_BOND,
-    )])
-    .execute_with(|| {
+    build_externalities_for_split().execute_with(|| {
         TokenContext::with_issuer_and_first_user();
         IssueRevenueSplitFixture::new().run();
         increase_block_number_by(MIN_REVENUE_SPLIT_TIME_TO_START);
@@ -488,17 +485,14 @@ fn participate_in_split_fails_with_zero_amount() {
 
 #[test]
 fn participate_in_split_ok_with_user_participating_to_a_previous_ended_split() {
-    build_default_test_externalities_with_balances(vec![(
-        DEFAULT_ISSUER_ACCOUNT_ID,
-        2 * DEFAULT_SPLIT_REVENUE + ed() + DEFAULT_BLOAT_BOND,
-    )])
-    .execute_with(|| {
+    build_externalities_for_split().execute_with(|| {
         TokenContext::with_issuer_and_first_user();
         IssueRevenueSplitFixture::new().run();
         increase_block_number_by(MIN_REVENUE_SPLIT_TIME_TO_START);
         ParticipateInSplitFixture::new().run();
         increase_block_number_by(DEFAULT_SPLIT_DURATION);
         FinalizeRevenueSplitFixture::new().run();
+        increase_account_balance(&DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_SPLIT_REVENUE);
         IssueRevenueSplitFixture::new().run();
         increase_block_number_by(MIN_REVENUE_SPLIT_TIME_TO_START);
 
@@ -586,61 +580,49 @@ fn participate_in_split_ok_with_dividends_transferred_to_claimer_joy_balance() {
 
 #[test]
 fn participate_in_split_ok_with_vesting_schedule_and_correct_transferrable_balance_accounting() {
-    pub const TOTAL_AMOUNT: u128 = DEFAULT_SALE_PURCHASE_AMOUNT * 2;
+    let issuer_revenue_split = DEFAULT_SPLIT_RATE.saturating_reciprocal_mul_ceil(100);
     build_externalities_for_split().execute_with(|| {
-        TokenContext::with_issuer_and_first_user();
-        Balances::make_free_balance_be(&FIRST_USER_ACCOUNT_ID, ed() + 100);
-        IssueRevenueSplitFixture::new().with_duration(150u64).run();
+        TokenContext::with_issuer_only();
+        Balances::make_free_balance_be(&FIRST_USER_ACCOUNT_ID, ed() + 100 + DEFAULT_BLOAT_BOND); // 100 from sale purchase
+        Balances::make_free_balance_be(&DEFAULT_ISSUER_ACCOUNT_ID, ed() + issuer_revenue_split); // 100 from sale purchase
+        IssueRevenueSplitFixture::new()
+            .with_duration(200u64)
+            .with_revenue_amount(issuer_revenue_split)
+            .run();
         InitTokenSaleFixture::new()
+            .with_duration(100)
+            .with_unit_price(1)
             .with_vesting_schedule_params(Some(VestingScheduleParams {
                 blocks_before_cliff: 0,
-                linear_vesting_duration: 100u64,
+                linear_vesting_duration: 100,
                 cliff_amount_percentage: Permill::zero(),
             }))
             .run();
-        PurchaseTokensOnSaleFixture::new()
-            .with_amount(TOTAL_AMOUNT)
-            .run();
-        let user_amount_pre =
-            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID)
-                .unwrap()
-                .amount;
-        increase_block_number_by(DEFAULT_SALE_DURATION);
+        PurchaseTokensOnSaleFixture::new().with_amount(100).run();
+        increase_block_number_by(100); // now sale duration is over and vesting is started thanks to cliff block
 
-        ParticipateInSplitFixture::new()
-            .with_amount(DEFAULT_SALE_PURCHASE_AMOUNT)
-            .execute_call()
-            .unwrap();
+        ParticipateInSplitFixture::new().with_amount(50).run();
 
         // expect vesting amount to be accounted for together with split participation
-        let account =
+        let mut account =
             Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
-        assert_eq!(account.amount, user_amount_pre);
+        assert_eq!(account.amount, 100);
         assert!(matches!(
             account.split_staking_status,
             Some(StakingStatus::<Balance> {
                 split_id: 0u32,
-                amount: DEFAULT_SALE_PURCHASE_AMOUNT,
+                amount: 50,
             }),
         ));
-        // vested (at cliff) = 2 * DEFAULT_SALE_PURCHASE_AMOUNT * 30%
-        // staked = DEFAULT_SALE_PURCHASE_AMOUNT
-        // unvested = 2 * DEFAULT_SALE_PURCHASE_AMOUNT * 70% > staked
-        // expect transferrable == TOTAL_AMOUNT - unvested
-        assert_eq!(
-            account.transferrable::<Test>(System::block_number()),
-            Permill::from_percent(30) * DEFAULT_SALE_PURCHASE_AMOUNT * 2,
-        );
-        // Advance 50 % of the vesting schedule duration
-        // vested = 2 * DEFAULT_SALE_PURCHASE_AMOUNT * (30% + 50% * 70%)
-        // staked = DEFAULT_SALE_PURCHASE_AMOUNT
-        // unvested = 2 * DEFAULT_SALE_PURCHASE_AMOUNT * 35% < staked
-        // expect transferrable == TOTAL_AMOUNT - staked
-        increase_block_number_by(Permill::from_percent(50) * DEFAULT_SALE_DURATION);
-        assert_eq!(
-            account.transferrable::<Test>(System::block_number()),
-            DEFAULT_SALE_PURCHASE_AMOUNT,
-        );
+        assert_eq!(account.transferrable::<Test>(System::block_number()), 0);
+        increase_block_number_by(50);
+        account =
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
+        assert_eq!(account.transferrable::<Test>(System::block_number()), 50); // 50% of the tokens vested and 50% staked
+        increase_block_number_by(1);
+        account =
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
+        assert_eq!(account.transferrable::<Test>(System::block_number()), 50); // 51% of the tokens vested but 50% staked
     })
 }
 
@@ -672,8 +654,8 @@ fn exit_revenue_split_fails_with_non_existing_account() {
         FinalizeRevenueSplitFixture::new().run();
 
         let result = ExitRevenueSplitFixture::new()
-            .with_sender(member!(3).1)
-            .with_member_id(member!(3).0)
+            .with_sender(SECOND_USER_ACCOUNT_ID)
+            .with_member_id(SECOND_USER_MEMBER_ID)
             .execute_call();
 
         assert_err!(result, Error::<Test>::AccountInformationDoesNotExist);
@@ -691,7 +673,7 @@ fn exit_revenue_split_fails_with_invalid_member_controller() {
         FinalizeRevenueSplitFixture::new().run();
 
         let result = ExitRevenueSplitFixture::new()
-            .with_sender(member!(3).1)
+            .with_sender(SECOND_USER_ACCOUNT_ID)
             .execute_call();
 
         assert_err!(
