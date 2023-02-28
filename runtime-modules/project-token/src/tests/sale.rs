@@ -96,8 +96,12 @@ fn unsuccesful_token_sale_init_with_duration_too_short() {
         .with_min_sale_duration(min_sale_duration)
         .build();
 
-    build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
+    build_test_externalities_with_balances(
+        config,
+        vec![(DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed())],
+    )
+    .execute_with(|| {
+        TokenContext::with_issuer_only();
         let result = InitTokenSaleFixture::new()
             .with_duration(min_sale_duration - 1)
             .execute_call();
@@ -122,7 +126,7 @@ fn unsuccesful_token_sale_init_with_upper_bound_quantity_exceeding_source_balanc
 #[test]
 fn unsuccesful_token_sale_init_with_invalid_source() {
     build_default_test_externalities().execute_with(|| {
-        TokenContext::with_issuer_and_first_user();
+        TokenContext::with_issuer_only();
 
         let result = InitTokenSaleFixture::new()
             .with_member_id(FIRST_USER_MEMBER_ID)
@@ -135,7 +139,8 @@ fn unsuccesful_token_sale_init_with_invalid_source() {
 #[test]
 fn unsuccesful_token_sale_init_when_token_not_idle() {
     build_default_test_externalities().execute_with(|| {
-        TokenContext::with_issuer_only();
+        TokenContext::with_issuer_and_first_user();
+        ActivateAmmFixture::new().run(); // set token state in AMM mode
 
         let result = InitTokenSaleFixture::new().execute_call();
 
@@ -149,12 +154,12 @@ fn unsuccesful_token_sale_init_when_previous_sale_not_finalized() {
         TokenContext::with_issuer_and_first_user();
         InitTokenSaleFixture::new().run();
         increase_account_balance(
-            &FIRST_USER_MEMBER_ID,
-            <Test as crate::Config>::JoyExistentialDeposit::get()
-                + DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT,
+            &FIRST_USER_ACCOUNT_ID,
+            ed() + DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT,
         );
         PurchaseTokensOnSaleFixture::new().run();
         increase_block_number_by(DEFAULT_SALE_DURATION);
+
         let result = InitTokenSaleFixture::new().execute_call();
 
         assert_err!(result, Error::<Test>::PreviousSaleNotFinalized);
@@ -276,14 +281,20 @@ fn unsuccesful_upcoming_sale_update_with_duration_too_short() {
         .with_min_sale_duration(min_sale_duration)
         .build();
 
-    build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
+    build_test_externalities_with_balances(
+        config,
+        vec![(DEFAULT_ISSUER_ACCOUNT_ID, 2 * (DEFAULT_BLOAT_BOND + ed()))],
+    )
+    .execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
         InitTokenSaleFixture::new()
             .with_start_block(Some(100))
             .run();
+
         let result = UpdateUpcomingSaleFixture::new()
             .with_new_duration(Some(min_sale_duration - 1))
             .execute_call();
+
         assert_err!(result, Error::<Test>::SaleDurationTooShort);
     })
 }
@@ -407,12 +418,11 @@ fn unsuccesful_sale_purchase_insufficient_joy_balance_existing_account() {
 #[test]
 fn unsuccesful_sale_purchase_amount_exceeds_quantity_left() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
+        TokenContext::with_issuer_only();
         InitTokenSaleFixture::new().run();
         increase_account_balance(
-            &FIRST_USER_MEMBER_ID,
-            <Test as crate::Config>::JoyExistentialDeposit::get()
-                + DEFAULT_SALE_UNIT_PRICE * (DEFAULT_INITIAL_ISSUANCE + 1),
+            &FIRST_USER_ACCOUNT_ID,
+            ed() + DEFAULT_SALE_UNIT_PRICE * (DEFAULT_INITIAL_ISSUANCE + 1) + DEFAULT_BLOAT_BOND,
         );
         let result = PurchaseTokensOnSaleFixture::new()
             .with_amount(DEFAULT_INITIAL_ISSUANCE + 1)
@@ -437,29 +447,32 @@ fn unsuccesful_sale_purchase_amount_is_zero() {
 
 #[test]
 fn unsuccesful_sale_purchase_vesting_balances_limit_reached() {
+    let max_vesting_schedules =
+        <Test as crate::Config>::MaxVestingSchedulesPerAccountPerToken::get();
+    let duration = DEFAULT_SALE_DURATION * (max_vesting_schedules as u64 + 1);
+    assert!(
+        DEFAULT_INITIAL_ISSUANCE
+            >= DEFAULT_SALE_PURCHASE_AMOUNT * (max_vesting_schedules as u128 + 1)
+    );
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
-        let max_vesting_schedules =
-            <Test as crate::Config>::MaxVestingSchedulesPerAccountPerToken::get();
+        TokenContext::with_issuer_and_first_user();
         increase_account_balance(
-            &FIRST_USER_MEMBER_ID,
+            &FIRST_USER_ACCOUNT_ID,
             ed() + DEFAULT_SALE_PURCHASE_AMOUNT
                 .saturating_mul(DEFAULT_SALE_UNIT_PRICE)
                 .saturating_mul((max_vesting_schedules + 1).into()),
         );
-        for _ in 0..<Test as crate::Config>::MaxVestingSchedulesPerAccountPerToken::get() {
+        for _ in 0..max_vesting_schedules {
             InitTokenSaleFixture::new()
                 .with_upper_bound_quantity(DEFAULT_SALE_PURCHASE_AMOUNT)
-                .with_vesting_blocks_before_cliff(
-                    DEFAULT_SALE_DURATION * (max_vesting_schedules + 1) as u64,
-                )
-                .with_linear_vesting_duration(100)
-                .with_cliff_amount_percentage(Permill::from_percent(0))
+                .with_linear_vesting_duration(duration)
                 .run();
             PurchaseTokensOnSaleFixture::new().run();
             increase_block_number_by(DEFAULT_SALE_DURATION);
         }
         InitTokenSaleFixture::new()
+            .with_vesting_schedule_params(Some(default_vesting_schedule_params()))
+            .with_linear_vesting_duration(duration)
             .with_upper_bound_quantity(DEFAULT_SALE_PURCHASE_AMOUNT)
             .run();
 
@@ -475,22 +488,23 @@ fn unsuccesful_sale_purchase_vesting_balances_limit_reached() {
 #[test]
 fn unsuccesful_sale_purchase_with_cap_exceeded_with_vesting() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
+        TokenContext::with_issuer_and_first_user();
         InitTokenSaleFixture::new()
             .with_cap_per_member(Some(DEFAULT_SALE_PURCHASE_AMOUNT))
+            .with_vesting_schedule_params(Some(default_vesting_schedule_params()))
             .run();
         increase_account_balance(
-            &FIRST_USER_MEMBER_ID,
-            <Test as crate::Config>::JoyExistentialDeposit::get()
-                + DEFAULT_SALE_UNIT_PRICE * (DEFAULT_SALE_PURCHASE_AMOUNT + 1),
+            &FIRST_USER_ACCOUNT_ID,
+            DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT * 2 + ed(),
         );
+        let purchase_fixture =
+            PurchaseTokensOnSaleFixture::new().with_amount(DEFAULT_SALE_PURCHASE_AMOUNT);
+
         // Make succesful purchase
-        PurchaseTokensOnSaleFixture::new().run();
+        purchase_fixture.run();
 
         // Try making another one (that would exceed the cap)
-        let result = PurchaseTokensOnSaleFixture::new()
-            .with_amount(1)
-            .execute_call();
+        let result = purchase_fixture.execute_call();
 
         assert_err!(result, Error::<Test>::SalePurchaseCapExceeded);
     })
@@ -499,21 +513,21 @@ fn unsuccesful_sale_purchase_with_cap_exceeded_with_vesting() {
 #[test]
 fn unsuccesful_sale_purchase_with_cap_exceeded_no_vesting() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
+        TokenContext::with_issuer_and_first_user();
         InitTokenSaleFixture::new()
             .with_cap_per_member(Some(DEFAULT_SALE_PURCHASE_AMOUNT))
             .run();
         increase_account_balance(
-            &FIRST_USER_MEMBER_ID,
-            ed() + DEFAULT_SALE_UNIT_PRICE * (DEFAULT_SALE_PURCHASE_AMOUNT + 1),
+            &FIRST_USER_ACCOUNT_ID,
+            ed() + (DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT * 2),
         );
+        let purchase_fixture =
+            PurchaseTokensOnSaleFixture::new().with_amount(DEFAULT_SALE_PURCHASE_AMOUNT);
         // Make succesful purchase
-        PurchaseTokensOnSaleFixture::new().run();
+        purchase_fixture.run();
 
         // Try making another one (that would exceed the cap)
-        let result = PurchaseTokensOnSaleFixture::new()
-            .with_amount(1)
-            .execute_call();
+        let result = purchase_fixture.execute_call();
 
         assert_err!(result, Error::<Test>::SalePurchaseCapExceeded);
     })
@@ -525,8 +539,8 @@ fn unsuccesful_sale_purchase_with_permissioned_token_and_non_existing_account() 
         TokenContext::with_issuer_only_permissioned();
         InitTokenSaleFixture::new().run();
         increase_account_balance(
-            &FIRST_USER_MEMBER_ID,
-            ed() + DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT,
+            &FIRST_USER_ACCOUNT_ID,
+            ed() + DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT + DEFAULT_BLOAT_BOND,
         );
 
         let result = PurchaseTokensOnSaleFixture::new().execute_call();
@@ -538,16 +552,16 @@ fn unsuccesful_sale_purchase_with_permissioned_token_and_non_existing_account() 
 #[test]
 fn unsuccesful_sale_purchase_with_invalid_member_controller() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
+        TokenContext::with_issuer_and_first_user();
         InitTokenSaleFixture::new().run();
         increase_account_balance(
-            &FIRST_USER_MEMBER_ID,
-            <Test as crate::Config>::JoyExistentialDeposit::get()
-                + (DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT),
+            &FIRST_USER_ACCOUNT_ID,
+            ed() + (DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT),
         );
 
         let result = PurchaseTokensOnSaleFixture::new()
             .with_sender(DEFAULT_ISSUER_MEMBER_ID)
+            .with_member_id(FIRST_USER_MEMBER_ID)
             .execute_call();
 
         assert_err!(
@@ -560,13 +574,11 @@ fn unsuccesful_sale_purchase_with_invalid_member_controller() {
 #[test]
 fn succesful_sale_purchases_non_existing_account_no_vesting_schedule() {
     build_default_test_externalities().execute_with(|| {
-        increase_account_balance(&DEFAULT_ISSUER_MEMBER_ID, ed() + DEFAULT_BLOAT_BOND);
-        IssueTokenFixture::new().run();
+        TokenContext::with_issuer_only();
         InitTokenSaleFixture::new().run();
         increase_account_balance(
             &FIRST_USER_ACCOUNT_ID,
-            ed() + (DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT * 2)
-                + DEFAULT_BLOAT_BOND,
+            ed() + DEFAULT_SALE_UNIT_PRICE * DEFAULT_SALE_PURCHASE_AMOUNT + DEFAULT_BLOAT_BOND,
         );
         PurchaseTokensOnSaleFixture::new().run();
 
@@ -574,7 +586,7 @@ fn succesful_sale_purchases_non_existing_account_no_vesting_schedule() {
             Token::account_info_by_token_and_member(DEFAULT_TOKEN_ID, FIRST_USER_MEMBER_ID);
         assert_eq!(
             buyer_acc_info.transferrable::<Test>(System::block_number()),
-            DEFAULT_SALE_PURCHASE_AMOUNT * 2
+            DEFAULT_SALE_PURCHASE_AMOUNT
         );
     })
 }
