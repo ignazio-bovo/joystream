@@ -558,6 +558,19 @@ pub fn build_default_test_externalities_with_balances(
     build_test_externalities_with_balances(GenesisConfigBuilder::new_empty().build(), balances)
 }
 
+pub fn build_externalities_for_split() -> TestExternalities {
+    build_test_externalities_with_balances(
+        GenesisConfigBuilder::new_empty().build(),
+        vec![
+            (
+                DEFAULT_ISSUER_ACCOUNT_ID,
+                2 * DEFAULT_BLOAT_BOND + DEFAULT_SPLIT_REVENUE + ed(),
+            ),
+            (FIRST_USER_ACCOUNT_ID, ed()),
+        ],
+    )
+}
+
 /// Moving past n blocks
 pub fn increase_block_number_by(n: u64) {
     let init_block = System::block_number();
@@ -641,11 +654,9 @@ pub const MIN_REVENUE_SPLIT_DURATION: u64 = 10;
 pub const MIN_REVENUE_SPLIT_TIME_TO_START: u64 = 10;
 pub const FIRST_USER_ACCOUNT_ID: u64 = 1002;
 pub const FIRST_USER_MEMBER_ID: u64 = 2;
-pub const SECOND_USER_ACCOUNT_ID: u64 = 1003;
 pub const SECOND_USER_MEMBER_ID: u64 = 3;
 pub const DEFAULT_USER_BURN_AMOUNT: u128 = 1000;
 pub const DEFAULT_USER_BALANCE: u128 = 10_000_000;
-pub const DEFAULT_USER_ALLOCATION_BALANCE: u128 = 1_000_000;
 
 // ------ Patronage Constants ----------------
 pub const DEFAULT_MAX_YEARLY_PATRONAGE_RATE: Permill = Permill::from_percent(15);
@@ -655,14 +666,14 @@ pub const DEFAULT_BLOCK_INTERVAL: u64 = 10;
 // ------ Sale Constants ---------------------
 pub const DEFAULT_SALE_UNIT_PRICE: u128 = 10;
 pub const DEFAULT_SALE_DURATION: u64 = 100;
+pub const DEFAULT_SALE_PURCHASE_AMOUNT: u128 = 1000;
 
 // ------ Revenue Split constants ------------
-pub const DEFAULT_SALE_PURCHASE_AMOUNT: u128 = 1000;
 pub const DEFAULT_SPLIT_REVENUE: u128 = 1000;
 pub const DEFAULT_SPLIT_RATE: Permill = Permill::from_percent(10);
 pub const DEFAULT_SPLIT_DURATION: u64 = 100;
 pub const DEFAULT_SPLIT_PARTICIPATION: u128 = 10_000_000;
-pub const DEFAULT_SPLIT_JOY_DIVIDEND: u128 = 10; // (participation / issuance) * revenue * rate
+pub const DEFAULT_SPLIT_JOY_DIVIDEND: u128 = 9; // (participation / (issuance + user balance)) * revenue * rate
 
 // ------ Bonding Curve Constants ------------
 pub const DEFAULT_AMM_BUY_AMOUNT: u128 = 1000;

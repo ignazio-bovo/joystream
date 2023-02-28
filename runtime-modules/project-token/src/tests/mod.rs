@@ -7,6 +7,6 @@ pub mod test_utils;
 // mod amm;
 // mod canonical;
 // mod patronage;
-mod sale;
-// mod split;
+// mod sale;
+mod split;
 // mod transfer;
