@@ -1437,15 +1437,8 @@ fn burn_fails_with_amount_exceeding_account_tokens() {
 
 #[test]
 fn burn_fails_with_active_revenue_split() {
-    build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
-        TransferFixture::new()
-            .with_output(
-                FIRST_USER_MEMBER_ID,
-                DEFAULT_SPLIT_PARTICIPATION + DEFAULT_USER_BALANCE,
-            )
-            .execute_call()
-            .unwrap();
+    build_externalities_for_split().execute_with(|| {
+        TokenContext::with_issuer_and_first_user();
         IssueRevenueSplitFixture::new().run();
         increase_block_number_by(MIN_REVENUE_SPLIT_TIME_TO_START);
         ParticipateInSplitFixture::new().run();
@@ -1466,8 +1459,7 @@ fn burn_fails_with_active_revenue_split() {
 #[test]
 fn burn_ok() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
-        TransferFixture::new().run();
+        TokenContext::with_issuer_and_first_user();
 
         let result = BurnFixture::new()
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
@@ -1480,8 +1472,7 @@ fn burn_ok() {
 #[test]
 fn burn_ok_with_account_tokens_amount_decreased() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
-        TransferFixture::new().run();
+        TokenContext::with_issuer_and_first_user();
 
         BurnFixture::new()
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
@@ -1517,7 +1508,7 @@ fn burn_ok_with_token_supply_decreased() {
 #[test]
 fn burn_ok_with_event_emitted() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
+        TokenContext::with_issuer_and_first_user();
 
         BurnFixture::new()
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
@@ -1536,11 +1527,12 @@ fn burn_ok_with_event_emitted() {
 #[test]
 fn burn_ok_with_staked_tokens_partially_burned() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
-        TransferFixture::new()
+        TokenContext::with_issuer_only();
+        IssuerTransferFixture::new()
             .with_output(
                 FIRST_USER_MEMBER_ID,
                 DEFAULT_SPLIT_PARTICIPATION + DEFAULT_USER_BALANCE,
+                None,
             )
             .run();
         IssueRevenueSplitFixture::new().run();
@@ -1568,11 +1560,12 @@ fn burn_ok_with_staked_tokens_partially_burned() {
 #[test]
 fn burn_ok_with_burned_token_greater_than_staked_amount() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
-        TransferFixture::new()
+        TokenContext::with_issuer_only();
+        IssuerTransferFixture::new()
             .with_output(
                 FIRST_USER_MEMBER_ID,
                 DEFAULT_SPLIT_PARTICIPATION + DEFAULT_USER_BALANCE,
+                None,
             )
             .run();
         IssueRevenueSplitFixture::new().run();
@@ -1601,64 +1594,35 @@ fn burn_ok_with_burned_token_greater_than_staked_amount() {
 #[test]
 fn burn_ok_with_vesting_and_staked_tokens_burned_first() {
     let vesting_params = VestingScheduleParams {
-        blocks_before_cliff: block!(0), // start vesting immediately
-        cliff_amount_percentage: Permill::from_percent(50),
-        linear_vesting_duration: block!(100),
+        blocks_before_cliff: 100 + MIN_REVENUE_SPLIT_DURATION,
+        cliff_amount_percentage: Zero::zero(),
+        linear_vesting_duration: 100,
     };
-
-    build_default_test_externalities_with_balances(vec![(
-        DEFAULT_ISSUER_ACCOUNT_ID,
-        2 * DEFAULT_BLOAT_BOND + ed() + DEFAULT_SPLIT_REVENUE,
-    )])
-    .execute_with(|| {
-        IssueTokenFixture::new()
-            .with_initial_allocation(
-                vec![
-                    (
-                        DEFAULT_ISSUER_MEMBER_ID,
-                        TokenAllocationOf::<Test> {
-                            amount: DEFAULT_INITIAL_ISSUANCE,
-                            vesting_schedule_params: None,
-                        },
-                    ),
-                    (
-                        FIRST_USER_MEMBER_ID,
-                        TokenAllocationOf::<Test> {
-                            amount: 2 * DEFAULT_USER_BALANCE,
-                            vesting_schedule_params: Some(vesting_params.clone()),
-                        },
-                    ),
-                ]
-                .iter()
-                .cloned()
-                .collect(),
-            )
-            .with_revenue_split_rate(Permill::from_percent(100))
-            .run();
-        IssueRevenueSplitFixture::new().run();
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_only();
+        IssuerTransferFixture::new()
+            .with_output(FIRST_USER_MEMBER_ID, 200, Some(vesting_params))
+            .run(); // get 200 over 100 blocks
+        IssueRevenueSplitFixture::new().with_duration(100).run();
         increase_block_number_by(MIN_REVENUE_SPLIT_TIME_TO_START);
-        ParticipateInSplitFixture::new()
-            .with_member_id(FIRST_USER_MEMBER_ID)
-            .with_amount(DEFAULT_USER_BALANCE)
-            .execute_call()
-            .unwrap();
-        increase_block_number_by(DEFAULT_SPLIT_DURATION);
+        ParticipateInSplitFixture::new().with_amount(100).run(); // stake 100
+        increase_block_number_by(100);
         FinalizeRevenueSplitFixture::new().run();
+        // vestinghas begun
 
         BurnFixture::new()
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
-            .with_amount(DEFAULT_USER_BALANCE)
-            .run();
+            .with_amount(100)
+            .run(); // burn 100
 
         let acc_data =
             Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
-        assert_eq!(acc_data.amount, DEFAULT_USER_BALANCE);
-        assert_eq!(
-            acc_data.transferrable::<Test>(System::block_number()),
-            DEFAULT_USER_BALANCE
-        );
-        assert_eq!(acc_data.vesting_schedules.len(), 0);
-        assert_eq!(acc_data.staked(), 0);
+        assert_eq!(acc_data.amount, 100);
+        increase_block_number_by(50); // 100 should be vested by half duration
+        assert_eq!(acc_data.transferrable::<Test>(System::block_number()), 100); // vested
+        increase_block_number_by(1); // 100 should be vested by half duration
+        assert_eq!(acc_data.transferrable::<Test>(System::block_number()), 100);
+        // but no more due to previous burn
     })
 }
 
@@ -1700,99 +1664,50 @@ fn burn_ok_with_vesting_and_staked_tokens_burned_first() {
 #[test]
 fn burn_ok_with_vesting_schedule_partially_burned_twice() {
     let vesting_params = VestingScheduleParams {
-        blocks_before_cliff: block!(0), // start vesting immediately
-        cliff_amount_percentage: Permill::from_percent(50),
-        linear_vesting_duration: block!(100),
+        blocks_before_cliff: Zero::zero(), // start vesting immediately
+        cliff_amount_percentage: Zero::zero(),
+        linear_vesting_duration: 100,
     };
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new()
-            .with_initial_allocation(
-                vec![
-                    (
-                        DEFAULT_ISSUER_MEMBER_ID,
-                        TokenAllocationOf::<Test> {
-                            amount: DEFAULT_INITIAL_ISSUANCE,
-                            vesting_schedule_params: None,
-                        },
-                    ),
-                    (
-                        FIRST_USER_MEMBER_ID,
-                        TokenAllocationOf::<Test> {
-                            amount: 8 * DEFAULT_USER_BURN_AMOUNT,
-                            vesting_schedule_params: Some(vesting_params.clone()),
-                        },
-                    ),
-                ]
-                .iter()
-                .cloned()
-                .collect(),
-            )
+        TokenContext::with_issuer_only();
+        IssuerTransferFixture::new()
+            .with_output(FIRST_USER_MEMBER_ID, 400, Some(vesting_params.clone()))
             .run();
 
         BurnFixture::new()
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
-            .with_amount(DEFAULT_USER_BURN_AMOUNT)
+            .with_amount(100)
             .run();
         BurnFixture::new()
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
-            .with_amount(2 * DEFAULT_USER_BURN_AMOUNT)
+            .with_amount(200)
             .run();
 
         let acc_data =
             Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
-        assert_eq!(acc_data.amount, 5 * DEFAULT_USER_BURN_AMOUNT);
+        assert_eq!(acc_data.amount, 100);
         assert_eq!(acc_data.vesting_schedules.len(), 1);
         let first_vesting_schedule = acc_data.vesting_schedules.iter().next().unwrap().1;
-        assert_eq!(
-            first_vesting_schedule.burned_amount,
-            3 * DEFAULT_USER_BURN_AMOUNT
-        );
-        assert_eq!(
-            first_vesting_schedule.locks::<Test>(1),
-            DEFAULT_USER_BURN_AMOUNT
-        );
-        assert_eq!(
-            first_vesting_schedule.non_burned_amount(),
-            5 * DEFAULT_USER_BURN_AMOUNT
-        );
+        assert_eq!(first_vesting_schedule.burned_amount, 300);
+        assert_eq!(first_vesting_schedule.locks::<Test>(1), 100);
+        assert_eq!(first_vesting_schedule.non_burned_amount(), 100);
     })
 }
 
 #[test]
 fn burn_ok_with_partially_burned_vesting_schedule_amounts_working_as_expected() {
-    let cliff_blocks = block!(10);
-    let vesting_duration = block!(100);
-    let half_vesting_duration = block!(50);
+    let cliff = 10;
+    let duration = 100;
     let vesting_params = VestingScheduleParams {
-        blocks_before_cliff: cliff_blocks,
+        blocks_before_cliff: cliff,
         cliff_amount_percentage: Permill::from_percent(50),
-        linear_vesting_duration: vesting_duration,
+        linear_vesting_duration: duration,
     };
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new()
-            .with_initial_allocation(
-                vec![
-                    (
-                        DEFAULT_ISSUER_MEMBER_ID,
-                        TokenAllocationOf::<Test> {
-                            amount: DEFAULT_INITIAL_ISSUANCE,
-                            vesting_schedule_params: None,
-                        },
-                    ),
-                    (
-                        FIRST_USER_MEMBER_ID,
-                        TokenAllocationOf::<Test> {
-                            amount: 2 * DEFAULT_USER_BALANCE,
-                            vesting_schedule_params: Some(vesting_params.clone()),
-                        },
-                    ),
-                ]
-                .iter()
-                .cloned()
-                .collect(),
-            )
+        TokenContext::with_issuer_only();
+        IssuerTransferFixture::new()
+            .with_output(FIRST_USER_MEMBER_ID, 200, Some(vesting_params.clone()))
             .run();
-        let now = System::block_number();
 
         let account_data =
             Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
@@ -1805,76 +1720,65 @@ fn burn_ok_with_partially_burned_vesting_schedule_amounts_working_as_expected() 
 
         // token balance right after cliff
         assert_eq!(
-            account_data.transferrable::<Test>(now + cliff_blocks + block!(10)),
-            DEFAULT_USER_BALANCE + DEFAULT_USER_BALANCE / 10
+            account_data.transferrable::<Test>(System::block_number() + cliff),
+            100
         );
 
-        // Expect linear increase after 10 blocks
+        // Expect linear increase after 50 blocks
         assert_eq!(
-            account_data.transferrable::<Test>(now + cliff_blocks + block!(10)),
-            DEFAULT_USER_BALANCE + DEFAULT_USER_BALANCE / 10
-        );
-        // Expect linear increase after half duration blocks
-        assert_eq!(
-            account_data.transferrable::<Test>(now + cliff_blocks + half_vesting_duration),
-            DEFAULT_USER_BALANCE + DEFAULT_USER_BALANCE / 2
+            account_data.transferrable::<Test>(System::block_number() + cliff + duration / 2),
+            150
         );
 
         // - right at the original's vesting end_block
         assert_eq!(
-            account_data.transferrable::<Test>(now + cliff_blocks + vesting_duration),
-            2 * DEFAULT_USER_BALANCE
+            account_data.transferrable::<Test>(System::block_number() + cliff + duration),
+            200
         );
         // - after the original's vesting `end_block`
         assert_eq!(
-            account_data.transferrable::<Test>(now + cliff_blocks + vesting_duration + 1),
-            2 * DEFAULT_USER_BALANCE
+            account_data.transferrable::<Test>(System::block_number() + cliff + duration + 1),
+            200
         );
 
         // Go after half vesting duration is passed
-        System::set_block_number(now + cliff_blocks + vesting_duration / 2);
+        System::set_block_number(System::block_number() + cliff + duration / 2);
 
         // Burn tokens and re-fetch account_data
         BurnFixture::new()
-            .with_amount(DEFAULT_USER_BALANCE / 2)
+            .with_amount(10)
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
             .run();
 
         let account_data =
             Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
 
-        // Expect transferrable balance at current block to still be 400
+        // Expect transferrable balance at current block to still be 150
         assert_eq!(
             account_data.transferrable::<Test>(System::block_number()),
-            DEFAULT_USER_BALANCE + DEFAULT_USER_BALANCE / 2
+            150
         );
-        // Expect transferrable balance after 100 blocks to be 450 (1 token / block rate preserved)
+        // Expect transferrable balance after 1 block to be 151 (1 token / block rate preserved)
         assert_eq!(
-            account_data.transferrable::<Test>(System::block_number() + half_vesting_duration / 2),
-            DEFAULT_USER_BALANCE + DEFAULT_USER_BALANCE / 2
+            account_data.transferrable::<Test>(System::block_number() + 1),
+            151
         );
 
-        // Expect transferrable balance to be 500:
-        // after 100 blocks
-        assert_eq!(
-            account_data.transferrable::<Test>(System::block_number() + half_vesting_duration / 10),
-            DEFAULT_USER_BALANCE + DEFAULT_USER_BALANCE / 2
-        );
         // right at the original vesting's `end_block`
         assert_eq!(
-            account_data.transferrable::<Test>(now + cliff_blocks + vesting_duration),
-            2 * DEFAULT_USER_BALANCE - DEFAULT_USER_BALANCE / 2
+            account_data.transferrable::<Test>(System::block_number() + duration / 2),
+            190
         );
         // after the original vesting's `end_block`
         assert_eq!(
-            account_data.transferrable::<Test>(now + cliff_blocks + vesting_duration + 1),
-            2 * DEFAULT_USER_BALANCE - DEFAULT_USER_BALANCE / 2
+            account_data.transferrable::<Test>(System::block_number() + duration / 2 + 1),
+            190
         );
 
         // Burn tokens and re-fetch account_data
         BurnFixture::new()
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
-            .with_amount(DEFAULT_USER_BALANCE / 2)
+            .with_amount(90)
             .run();
 
         let account_data =
@@ -1884,7 +1788,7 @@ fn burn_ok_with_partially_burned_vesting_schedule_amounts_working_as_expected() 
         // expect transferrable balance at current block to be 300
         assert_eq!(
             account_data.transferrable::<Test>(System::block_number()),
-            DEFAULT_USER_BALANCE
+            100
         );
     })
 }
