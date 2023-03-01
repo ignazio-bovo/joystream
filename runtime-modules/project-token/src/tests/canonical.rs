@@ -45,19 +45,8 @@ fn join_whitelist_fails_with_token_id_not_valid() {
 
 #[test]
 fn join_whitelist_fails_with_existing_account() {
-    build_default_test_externalities_with_balances(vec![
-        (FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed()),
-        (DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed()),
-    ])
-    .execute_with(|| {
-        IssueTokenFixture::new()
-            .with_transfer_policy_params(TransferPolicyParams::Permissioned(WhitelistParams {
-                commitment: merkle_root![FIRST_USER_MEMBER_ID, SECOND_USER_MEMBER_ID],
-                payload: None,
-            }))
-            .execute_call()
-            .unwrap();
-        TransferFixture::new().run();
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::with_issuer_and_first_user_permissioned();
 
         let result = JoinWhitelistFixture::new().execute_call();
 
@@ -221,13 +210,8 @@ fn join_whitelist_ok_with_bloat_bond_transferred_to_treasury() {
         (DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed()),
     ])
     .execute_with(|| {
-        IssueTokenFixture::new()
-            .with_transfer_policy_params(TransferPolicyParams::Permissioned(WhitelistParams {
-                commitment: merkle_root![FIRST_USER_MEMBER_ID, SECOND_USER_MEMBER_ID],
-                payload: None,
-            }))
-            .execute_call()
-            .unwrap();
+        TokenContext::with_issuer_only_permissioned();
+        let treasury_balance_pre = Balances::usable_balance(&Token::module_treasury_account());
 
         JoinWhitelistFixture::new()
             .with_merkle_proof(merkle_proof![
@@ -239,7 +223,7 @@ fn join_whitelist_ok_with_bloat_bond_transferred_to_treasury() {
 
         assert_eq!(
             Balances::usable_balance(&Token::module_treasury_account()),
-            ExistentialDeposit::get() + DEFAULT_BLOAT_BOND
+            treasury_balance_pre + DEFAULT_BLOAT_BOND
         );
     })
 }
@@ -472,8 +456,7 @@ fn dust_account_fails_with_invalid_member_id() {
 #[test]
 fn dust_account_fails_with_permissionless_mode_and_non_empty_account() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
-        TransferFixture::new().run();
+        TokenContext::with_issuer_and_first_user_permissioned();
 
         let result = DustAccountFixture::new()
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
@@ -755,37 +738,31 @@ fn dust_account_ok_by_user_with_bloat_bond_refunded_to_controller() {
     })
 }
 
-// #[test]
-// fn dust_account_ok_by_user_with_restricted_bloat_bond_refunded() {
-//     let (token_id, init_supply) = (token!(1), balance!(100));
-//     let treasury = Token::module_treasury_account();
-//     let ((owner_id, _), (user_id, user_acc), (other_user_id, _), restricted_to) =
-//         (member!(1), member!(2), member!(3), account!(1004));
-//     let (bloat_bond, updated_bloat_bond) = (joy!(100), joy!(150));
+#[test]
+fn dust_account_ok_by_user_with_restricted_bloat_bond_refunded() {
+    build_default_test_externalities().execute_with(|| {
+        TokenContext::new()
+            .with_first_user_balance(Some(Zero::zero()))
+            .build();
+        increase_account_balance(&FIRST_USER_ACCOUNT_ID, ed() + DEFAULT_BLOAT_BOND);
+        set_invitation_lock(&FIRST_USER_ACCOUNT_ID, DEFAULT_BLOAT_BOND + ed());
+        let first_user_balance_pre = Balances::usable_balance(FIRST_USER_ACCOUNT_ID);
+        let treasury_balance_pre = Balances::usable_balance(Token::module_treasury_account());
 
-//     let token_data = TokenDataBuilder::new_empty().build();
+        DustAccountFixture::new()
+            .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
+            .run();
 
-//     let config = GenesisConfigBuilder::new_empty()
-//         .with_token_and_owner(token_id, token_data, owner_id, init_supply)
-//         .with_bloat_bond(updated_bloat_bond)
-//         .with_account(user_id, ConfigAccountData::new())
-//         .with_account(
-//             other_user_id,
-//             ConfigAccountData::new_with_amount_and_bond(
-//                 balance!(0),
-//                 RepayableBloatBond::new(bloat_bond, Some(restricted_to)),
-//             ),
-//         )
-//         .build();
-
-//     build_test_externalities(config).execute_with(|| {
-//         increase_account_balance(&treasury, bloat_bond);
-
-//         let _ = Token::dust_account(origin!(user_acc), token_id, other_user_id);
-
-//         assert_eq!(Balances::usable_balance(restricted_to), bloat_bond);
-//     })
-// }
+        assert_eq!(
+            first_user_balance_pre + DEFAULT_BLOAT_BOND,
+            Balances::usable_balance(FIRST_USER_ACCOUNT_ID)
+        );
+        assert_eq!(
+            treasury_balance_pre - DEFAULT_BLOAT_BOND,
+            Balances::usable_balance(Token::module_treasury_account())
+        );
+    })
+}
 
 #[test]
 fn dust_account_ok_with_unregistered_member_doing_the_dusting() {
@@ -950,33 +927,28 @@ fn issue_token_fails_with_existing_symbol() {
 
 #[test]
 fn issue_token_fails_with_insufficient_balance_for_bloat_bond() {
-    build_default_test_externalities().execute_with(|| {
-        let _ = Balances::slash(&DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND);
-        IssueTokenFixture::new().with_symbol(HashOut::zero()).run();
+    build_default_test_externalities_with_balances(vec![(DEFAULT_ISSUER_ACCOUNT_ID, ed())])
+        .execute_with(|| {
+            let result = IssueTokenFixture::new().execute_call();
 
-        let result = IssueTokenFixture::new()
-            .with_symbol(HashOut::zero())
-            .execute_call();
-
-        assert_err!(result, Error::<Test>::InsufficientJoyBalance);
-    })
+            assert_err!(result, Error::<Test>::InsufficientJoyBalance);
+        })
 }
 
 #[test]
 fn issue_token_ok_with_bloat_bond_transferred() {
-    build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().with_symbol(HashOut::zero()).run();
-
-        IssueTokenFixture::new().with_symbol(HashOut::zero()).run();
+    build_default_test_externalities_with_balances(vec![(
+        DEFAULT_ISSUER_ACCOUNT_ID,
+        DEFAULT_BLOAT_BOND + ed(),
+    )])
+    .execute_with(|| {
+        IssueTokenFixture::new().run();
 
         assert_eq!(
             Balances::usable_balance(Token::module_treasury_account()),
             DEFAULT_BLOAT_BOND + ed()
         );
-        assert_eq!(
-            Balances::usable_balance(DEFAULT_ISSUER_ACCOUNT_ID),
-            ExistentialDeposit::get()
-        );
+        assert_eq!(Balances::usable_balance(DEFAULT_ISSUER_ACCOUNT_ID), ed());
     })
 }
 
@@ -1201,8 +1173,8 @@ fn issue_token_ok_with_invitation_locked_funds(
     locked_balance: JoyBalance,
     expected_bloat_bond_restricted_to: (Option<AccountId>, Option<AccountId>, Option<AccountId>),
 ) {
-    build_default_test_externalities().execute_with(|| {
-        increase_account_balance(&DEFAULT_ISSUER_ACCOUNT_ID, 2 * DEFAULT_BLOAT_BOND);
+    build_default_test_externalities_with_balances(vec![]).execute_with(|| {
+        increase_account_balance(&DEFAULT_ISSUER_ACCOUNT_ID, 3 * DEFAULT_BLOAT_BOND + ed());
         set_invitation_lock(&DEFAULT_ISSUER_ACCOUNT_ID, locked_balance);
         let fixture = IssueTokenFixture::new().with_initial_allocation(
             vec![
@@ -1379,11 +1351,13 @@ fn burn_fails_with_invalid_token_id() {
 }
 
 #[test]
-fn burn_fails_with_non_existing_account() {
+fn burn_fails_with_non_existing_member_in_membership_pallet() {
     build_default_test_externalities().execute_with(|| {
-        IssueTokenFixture::new().run();
+        TokenContext::with_issuer_only();
 
-        let result = BurnFixture::new().execute_call();
+        let result = BurnFixture::new()
+            .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
+            .execute_call();
 
         assert_err!(result, Error::<Test>::AccountInformationDoesNotExist);
     })
@@ -1419,13 +1393,13 @@ fn burn_fails_with_zero_amount() {
 #[test]
 fn burn_fails_with_amount_exceeding_account_tokens() {
     build_default_test_externalities().execute_with(|| {
-        increase_account_balance(&DEFAULT_ISSUER_ACCOUNT_ID, DEFAULT_BLOAT_BOND);
-        IssueTokenFixture::new().run();
-        TransferFixture::new().run();
+        TokenContext::new()
+            .with_first_user_balance(Some(100))
+            .build();
 
         let result = BurnFixture::new()
             .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
-            .with_amount(DEFAULT_USER_BALANCE + 1)
+            .with_amount(101)
             .execute_call();
 
         assert_err!(
@@ -1626,40 +1600,49 @@ fn burn_ok_with_vesting_and_staked_tokens_burned_first() {
     })
 }
 
-// #[test]
-// fn burn_ok_with_vesting_and_staked_tokens_partially_burned() {
-//     let vesting_schedule = default_vesting_schedule();
-//     let account_data = ConfigAccountData::new()
-//         .with_max_vesting_schedules(vesting_schedule)
-//         .with_staked(2000);
-//     let initial_account_amount = account_data.amount;
-//     let initial_vesting_schedules = account_data.vesting_schedules.len();
-//     let (token_id, burn_amount, (member_id, account)) = (token!(1), balance!(1400), member!(1));
-//     let token_data = TokenDataBuilder::new_empty().build();
+#[test]
+fn burn_ok_with_vesting_and_staked_tokens_partially_burned() {
+    build_externalities_for_split().execute_with(|| {
+        TokenContext::with_issuer_only();
+        IssuerTransferFixture::new()
+            .with_output(
+                FIRST_USER_MEMBER_ID,
+                200,
+                Some(VestingScheduleParams {
+                    linear_vesting_duration: 100,
+                    blocks_before_cliff: MIN_REVENUE_SPLIT_TIME_TO_START + 100,
+                    cliff_amount_percentage: Zero::zero(),
+                }),
+            )
+            .run();
+        IssueRevenueSplitFixture::new().with_duration(100).run();
+        increase_block_number_by(MIN_REVENUE_SPLIT_TIME_TO_START);
+        ParticipateInSplitFixture::new().with_amount(100).run();
+        increase_block_number_by(100); // vesting is starting
+        FinalizeRevenueSplitFixture::new().run();
 
-//     let config = GenesisConfigBuilder::new_empty()
-//         .with_token(token_id, token_data)
-//         .with_account(member_id, account_data)
-//         .build();
+        BurnFixture::new()
+            .with_user(FIRST_USER_ACCOUNT_ID, FIRST_USER_MEMBER_ID)
+            .with_amount(100)
+            .run();
 
-//     build_test_externalities(config).execute_with(|| {
-//         let result = Token::burn(origin!(account), token_id, member_id, burn_amount);
-
-//         assert_ok!(result);
-//         let acc_data = Token::ensure_account_data_exists(token_id, &member_id).unwrap();
-//         assert_eq!(acc_data.amount, initial_account_amount - burn_amount);
-//         assert_eq!(acc_data.staked(), 600);
-//         assert_eq!(acc_data.transferrable::<Test>(1), 0);
-//         assert_eq!(
-//             acc_data.vesting_schedules.len(),
-//             initial_vesting_schedules - 1
-//         );
-//         let first_vesting_schedule = acc_data.vesting_schedules.iter().next().unwrap().1;
-//         assert_eq!(first_vesting_schedule.burned_amount, 400);
-//         assert_eq!(first_vesting_schedule.locks::<Test>(1), 600);
-//         assert_eq!(first_vesting_schedule.non_burned_amount(), 600);
-//     })
-// }
+        let account_data =
+            Token::ensure_account_data_exists(DEFAULT_TOKEN_ID, &FIRST_USER_MEMBER_ID).unwrap();
+        assert_eq!(account_data.staked(), 0); // burn all the stacked tokens
+        assert_eq!(
+            account_data.transferrable::<Test>(System::block_number()),
+            0
+        );
+        assert_eq!(
+            account_data.transferrable::<Test>(System::block_number() + 100),
+            100
+        );
+        let (_, vesting_schedule) = account_data.vesting_schedules.iter().next().unwrap();
+        assert_eq!(vesting_schedule.burned_amount, 100);
+        assert_eq!(vesting_schedule.locks::<Test>(System::block_number()), 100);
+        assert_eq!(vesting_schedule.non_burned_amount(), 100);
+    })
+}
 
 #[test]
 fn burn_ok_with_vesting_schedule_partially_burned_twice() {
