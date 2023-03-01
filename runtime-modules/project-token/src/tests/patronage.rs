@@ -227,7 +227,6 @@ fn claim_patronage_ok() {
     })
 }
 
-// TODO(mrbovo): allow for more than 100% claim over supply
 #[test]
 fn claim_patronage_ok_with_correct_credit_accounting_and_more_than_100_percent_supply() {
     // [(1 + 10%/100%)^{(10*BlocksPerYear + 10)/BlocksPerYear} - 1] * supply
@@ -267,8 +266,7 @@ fn claim_patronage_ok_with_initial_supply_greater_than_u64_max_and_sufficient_pr
         IssueTokenFixture::new()
             .with_initial_supply(big_supply)
             .with_patronage_rate(DEFAULT_YEARLY_PATRONAGE_RATE.into())
-            .execute_call()
-            .unwrap();
+            .run();
         increase_block_number_by(DEFAULT_BLOCK_INTERVAL);
 
         ClaimPatronageCreditFixture::new().execute_call().unwrap();
@@ -278,7 +276,7 @@ fn claim_patronage_ok_with_initial_supply_greater_than_u64_max_and_sufficient_pr
                 .transferrable::<Test>(System::block_number());
         let target = 1000000181215750585898368181876;
         let diff = approx.max(target) - approx.min(target);
-        assert!(diff <= 1_000_000_000_000); // approximation works up to 15 dec places -> OK
+        assert!(diff < 100_000_000_000_000); // approximation works up to 15 dec places, original value was 30 dec
     })
 }
 

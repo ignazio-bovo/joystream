@@ -612,7 +612,7 @@ pub struct ClaimPatronageCreditFixture {
     #[new(value = "DEFAULT_TOKEN_ID")]
     token_id: TokenId,
 
-    #[new(value = "FIRST_USER_MEMBER_ID")]
+    #[new(value = "DEFAULT_ISSUER_MEMBER_ID")]
     member_id: MemberId,
 }
 
