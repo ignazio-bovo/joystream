@@ -911,6 +911,19 @@ impl<Balance, VestingScheduleParams>
 /// Wrapper around BTreeMap<MemberId, Payment>
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug, TypeInfo)]
 pub struct Transfers<MemberId, Payment>(pub BTreeMap<MemberId, Payment>);
+impl<MemberId, Payment> Transfers<MemberId, Payment> {
+    pub fn iter(&self) -> sp_std::collections::btree_map::Iter<MemberId, Payment> {
+        self.0.iter()
+    }
+}
+
+impl<MemberId: Ord + Eq + Clone, Payment> Transfers<Validated<MemberId>, Payment> {
+    pub fn count_non_existing_accounts(&self) -> usize {
+        self.iter()
+            .filter(|&(dst, _)| dst.is_non_existing_account())
+            .count()
+    }
+}
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug, TypeInfo)]
 pub struct TestTransfers<MemberId, Payment, MaxOutputs: Get<u32>>(
@@ -932,6 +945,12 @@ pub enum Validated<MemberId: Ord + Eq + Clone> {
 
     /// Non Existing account
     NonExisting(MemberId),
+}
+
+impl<MemberId: Ord + Eq + Clone> Validated<MemberId> {
+    pub fn is_non_existing_account(&self) -> bool {
+        matches!(self, &Validated::<_>::NonExisting(_))
+    }
 }
 
 /// Utility wrapper around existing/non existing accounts to be updated/inserted due to

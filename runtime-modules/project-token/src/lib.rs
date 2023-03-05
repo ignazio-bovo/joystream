@@ -460,6 +460,7 @@ decl_module! {
                 Err(Error::<T>::CannotJoinWhitelistInPermissionlessMode.into())
             }?;
 
+            // FIXME: refactor
             let bloat_bond = Self::bloat_bond();
 
             // Ensure sender can cover the bloat bond
@@ -1676,7 +1677,7 @@ impl<T: Config> Module<T> {
             Self::validate_transfers(token_id, transfers, &token_info.transfer_policy, is_issuer)?;
 
         // compute bloat bond
-        let cumulative_bloat_bond = Self::compute_bloat_bond(&validated_transfers);
+        let cumulative_bloat_bond = Self::compute_bloat_bond_after_validation(&validated_transfers);
         ensure!(
             has_sufficient_balance_for_fees::<T>(bloat_bond_payer, cumulative_bloat_bond),
             Error::<T>::InsufficientJoyBalance
@@ -1938,20 +1939,17 @@ impl<T: Config> Module<T> {
         }
     }
 
-    pub(crate) fn compute_bloat_bond(
+    pub(crate) fn bloat_bond_times(number_of_new_accounts: usize) -> JoyBalanceOf<T> {
+        (0..number_of_new_accounts).fold(Zero::zero(), |acc, _| {
+            acc.saturating_add(Self::bloat_bond())
+        })
+    }
+
+    pub(crate) fn compute_bloat_bond_after_validation(
         validated_transfers: &ValidatedTransfersOf<T>,
     ) -> JoyBalanceOf<T> {
-        let bloat_bond = Self::bloat_bond();
-        validated_transfers
-            .0
-            .iter()
-            .fold(JoyBalanceOf::<T>::zero(), |total, (dst, _)| {
-                if matches!(dst, Validated::<_>::NonExisting(_)) {
-                    total.saturating_add(bloat_bond)
-                } else {
-                    JoyBalanceOf::<T>::zero()
-                }
-            })
+        let new_accounts_number = validated_transfers.count_non_existing_accounts();
+        Self::bloat_bond_times(new_accounts_number)
     }
 
     pub(crate) fn validate_transfers(
@@ -2064,10 +2062,13 @@ impl<T: Config> Module<T> {
         let treasury = Self::module_treasury_account();
         let locked_balance_used = pay_fee::<T>(from, Some(&treasury), bloat_bond)?;
 
-        Ok(match locked_balance_used.is_zero() {
-            true => RepayableBloatBond::new(bloat_bond, None),
-            false => RepayableBloatBond::new(bloat_bond, Some(from.clone())),
-        })
+        let repayment_restricted_to = if locked_balance_used.is_zero() {
+            None
+        } else {
+            Some(from.clone())
+        };
+
+        Ok(RepayableBloatBond::new(bloat_bond, repayment_restricted_to))
     }
 
     fn pay_initial_allocation_bloat_bonds(
@@ -2076,11 +2077,11 @@ impl<T: Config> Module<T> {
     ) -> Result<AllocationWithBloatBondsOf<T>, DispatchError> {
         let bloat_bond = Self::bloat_bond();
         let treasury = Self::module_treasury_account();
-        let number_of_new_accounts = initial_allocation.len() as u32;
+        let number_of_new_accounts = initial_allocation.len();
         let locked_balance_used = pay_fee::<T>(
             from,
             Some(&treasury),
-            bloat_bond.saturating_mul(number_of_new_accounts.into()),
+            Self::bloat_bond_times(number_of_new_accounts),
         )?;
 
         Ok(initial_allocation
@@ -2097,26 +2098,22 @@ impl<T: Config> Module<T> {
             .collect())
     }
 
+    // FIXME: refactor
     fn pay_transfer_bloat_bonds(
         from: &T::AccountId,
         validated_transfers: &ValidatedTransfersOf<T>,
     ) -> Result<Transfers<ValidatedWithBloatBondOf<T>, ValidatedPaymentOf<T>>, DispatchError> {
         let bloat_bond = Self::bloat_bond();
         let treasury = Self::module_treasury_account();
-        let number_of_new_accounts = validated_transfers
-            .0
-            .iter()
-            .filter(|(a, _)| matches!(a, Validated::<_>::NonExisting(_)))
-            .count() as u32;
+        let number_of_new_accounts = validated_transfers.count_non_existing_accounts();
         let locked_balance_used = pay_fee::<T>(
             from,
             Some(&treasury),
-            bloat_bond.saturating_mul(number_of_new_accounts.into()),
+            Self::bloat_bond_times(number_of_new_accounts),
         )?;
 
         let mut bloat_bond_index: u32 = 0;
         let transfers_set = validated_transfers
-            .0
             .iter()
             .map(
                 |(validated_member_id, validated_payment)| match validated_member_id {
