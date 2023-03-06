@@ -42,7 +42,7 @@ use sp_runtime::{
 };
 use sp_std::collections::btree_map::BTreeMap;
 use sp_std::convert::TryInto;
-use sp_std::iter::Sum;
+use sp_std::iter::{Iterator, Sum};
 use sp_std::vec;
 use sp_std::vec::Vec;
 use storage::UploadParameters;
@@ -1694,6 +1694,11 @@ impl<T: Config> Module<T> {
         validated_transfers: &ValidatedTransfersOf<T>,
     ) -> DispatchResult {
         let current_block = Self::current_block();
+        let new_accounts = validated_transfers
+            .iter()
+            .filter(|&(v_member, _)| v_member.is_non_existing_account());
+
+        let new_accounts_and_bloat_bonds = Self::pay_bloat_bonds(bloat_bond_payer, new_accounts);
 
         let validated_transfers_with_bloat_bonds =
             Self::pay_transfer_bloat_bonds(bloat_bond_payer, validated_transfers)?;
@@ -2069,6 +2074,46 @@ impl<T: Config> Module<T> {
         };
 
         Ok(RepayableBloatBond::new(bloat_bond, repayment_restricted_to))
+    }
+
+    pub(crate) fn pay_bloat_bonds<MemberId: Copy, Info: Clone>(
+        from: &T::AccountId,
+        new_accounts: impl Iterator<Item = (MemberId, Info)> + Clone,
+    ) -> Result<impl Iterator<Item = (MemberId, (Info, RepayableBloatBondOf<T>))>, DispatchError>
+    {
+        let number_of_new_accounts = new_accounts.clone().count();
+        let locked_balance_used = pay_fee::<T>(
+            from,
+            Some(&Self::module_treasury_account()),
+            Self::bloat_bond_times(number_of_new_accounts),
+        )?;
+
+        let repayable_bloat_bonds = Self::generate_bonds_for_locked_qty(
+            from.clone(),
+            locked_balance_used,
+            number_of_new_accounts,
+        );
+
+        let result = new_accounts
+            .zip(repayable_bloat_bonds)
+            .map(|((member_id, info), bloat_bond)| (member_id, (info.to_owned(), bloat_bond)));
+
+        Ok(result)
+    }
+
+    pub(crate) fn generate_bonds_for_locked_qty(
+        from: T::AccountId,
+        locked_balance_used: JoyBalanceOf<T>,
+        new_accounts_number: usize,
+    ) -> impl Iterator<Item = RepayableBloatBondOf<T>> {
+        let bloat_bond = Self::bloat_bond();
+        (0..new_accounts_number).map(move |n| {
+            if bloat_bond.saturating_mul((n as u32).into()) <= locked_balance_used {
+                RepayableBloatBond::new(bloat_bond, None)
+            } else {
+                RepayableBloatBond::new(bloat_bond, Some(from.to_owned()))
+            }
+        })
     }
 
     fn pay_initial_allocation_bloat_bonds(
