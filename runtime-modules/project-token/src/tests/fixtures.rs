@@ -1,13 +1,12 @@
 #![cfg(test)]
 
 use crate::tests::mock::*;
-// TODO remove test utils
-use crate::tests::test_utils::{new_issuer_transfers, new_transfers, TokenDataBuilder};
-use crate::traits::PalletToken;
-use crate::types::{AmmParams, TransferOutputsOf, TransferWithVestingOutputsOf};
-use crate::{member, yearly_rate, YearlyRate};
-use derive_fixture::Fixture;
-use derive_new::new;
+use crate::tests::test_utils::new_transfers;
+use crate::types::{Joy, TransferOutputsOf};
+use crate::{
+    last_event_eq, member, yearly_rate, AccountInfoByTokenAndMember, RawEvent, YearlyRate,
+};
+use crate::{traits::PalletToken, types::VestingSource, SymbolsUsed};
 use frame_support::dispatch::DispatchResult;
 use sp_runtime::{testing::H256, Permill};
 
