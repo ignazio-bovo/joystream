@@ -6,7 +6,6 @@ use crate::types::{AmmCurve, AmmOperation};
 use crate::{joy, last_event_eq, member, Error, RawEvent, RepayableBloatBondOf};
 use frame_support::traits::Currency;
 use frame_support::{assert_err, assert_ok};
-use sp_runtime::traits::One;
 use sp_runtime::{traits::Zero, DispatchError, Permill};
 
 // --------------------- amm_buy -------------------------------
