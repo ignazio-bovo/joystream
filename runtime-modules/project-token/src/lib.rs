@@ -47,7 +47,6 @@ use sp_std::convert::TryInto;
 use sp_std::iter::{Iterator, Sum};
 use sp_std::vec;
 use sp_std::vec::Vec;
-use std::ops::Div;
 use storage::UploadParameters;
 
 // crate modules
