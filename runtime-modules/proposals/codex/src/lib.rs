@@ -127,6 +127,7 @@ pub trait Config:
     + proposals_discussion::Config
     + common::membership::MembershipTypes
     + staking::Config
+    + token::Config
     + proposals_engine::Config
     + working_group::Config<ForumWorkingGroupInstance>
     + working_group::Config<StorageWorkingGroupInstance>
@@ -274,8 +275,8 @@ pub trait Config:
     /// Max allowed number of validators in set max validator count proposal
     type SetMaxValidatorCountProposalMaxValidators: Get<u32>;
 
-    /// `Update Max Yearly Patronage Rate` proposal parameters
-    type UpdateMaxYearlyPatronageRateProposalParameters: Get<
+    /// `Update pallet project token` proposal parameters
+    type UpdateTokenPalletGovernanceParameters: Get<
         ProposalParameters<Self::BlockNumber, BalanceOf<Self>>,
     >;
 }
@@ -385,8 +386,6 @@ decl_error! {
         /// Arithmeic Error
         ArithmeticError,
 
-        /// Max yearly patronage rate cannot be zero
-        MaxYearlyPatronageRateCannotBeZero,
     }
 
 }
@@ -506,9 +505,9 @@ decl_module! {
         const SetMaxValidatorCountProposalMaxValidators: u32 =
             T::SetMaxValidatorCountProposalMaxValidators::get();
 
-        /// Max yearly patronage rate update proposal
-        const UpdateMaxYearlyPatronageRate:
-            ProposalParameters<T::BlockNumber, BalanceOf<T>> = T::UpdateMaxYearlyPatronageRateProposalParameters::get();
+        /// pallet token governance parameters proposal
+        const UpdateTokenPalletGovernanceParameters:
+            ProposalParameters<T::BlockNumber, BalanceOf<T>> = T::UpdateTokenPalletGovernanceParameters::get();
 
         /// Create a proposal, the type of proposal depends on the `proposal_details` variant
         ///
@@ -874,11 +873,8 @@ impl<T: Config> Module<T> {
                     );
                 }
             }
-            ProposalDetails::UpdateMaxYearlyPatronageRate(rate) => {
-                ensure!(
-                    !rate.is_zero(),
-                    Error::<T>::MaxYearlyPatronageRateCannotBeZero,
-                );
+            ProposalDetails::UpdateTokenPalletGovernanceParameters(..) => {
+                // Note: No checks for this proposal for now
             }
         }
 
@@ -947,8 +943,8 @@ impl<T: Config> Module<T> {
             ProposalDetails::UpdateChannelPayouts(..) => {
                 T::UpdateChannelPayoutsProposalParameters::get()
             }
-            ProposalDetails::UpdateMaxYearlyPatronageRate(..) => {
-                T::UpdateMaxYearlyPatronageRateProposalParameters::get()
+            ProposalDetails::UpdateTokenPalletGovernanceParameters(..) => {
+                T::UpdateTokenPalletGovernanceParameters::get()
             }
         }
     }
@@ -1111,8 +1107,8 @@ impl<T: Config> Module<T> {
                 )
                 .saturated_into()
             }
-            ProposalDetails::UpdateMaxYearlyPatronageRate(..) => {
-                WeightInfoCodex::<T>::create_proposal_update_max_yearly_patronage_rate(
+            ProposalDetails::UpdateTokenPalletGovernanceParameters(..) => {
+                WeightInfoCodex::<T>::create_proposal_update_token_pallet_governance_parameters(
                     to_kb(title_length.saturated_into()),
                     to_kb(description_length.saturated_into()),
                 )

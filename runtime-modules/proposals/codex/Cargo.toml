@@ -38,6 +38,7 @@ pallet-staking-reward-curve = { package = 'pallet-staking-reward-curve', default
 strum = {version = "0.19", default-features = false}
 staking-handler = { package = 'pallet-staking-handler', default-features = false, path = '../../staking-handler'}
 referendum = { package = 'pallet-referendum', default-features = false, path = '../../referendum'}
+storage = { package = 'pallet-storage', default-features = false, path = '../../storage'}
 council = { package = 'pallet-council', default-features = false, path = '../../council'}
 balances = { package = 'pallet-balances', default-features = false, git = 'https://github.com/joystream/substrate.git', rev = 'd29a53b11c3e530d1656eef502cb0f1f8fff3522'}
 frame-election-provider-support = { package = 'frame-election-provider-support', git = 'https://github.com/joystream/substrate.git', rev = 'd29a53b11c3e530d1656eef502cb0f1f8fff3522'}
