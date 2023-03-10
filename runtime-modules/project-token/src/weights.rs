@@ -54,11 +54,15 @@ pub trait WeightInfo {
 	fn buy_on_amm_with_account_creation() -> Weight;
 	fn buy_on_amm_with_existing_account() -> Weight;
 	fn sell_on_amm() -> Weight;
+    fn update_governance_parameters() -> Weight;
 }
 
 /// Weights for project_token using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
+    fn update_governance_parameters() -> Weight {
+        0
+    }
 	// Storage: Membership MembershipById (r:2 w:0)
 	// Storage: Token TokenInfoById (r:1 w:1)
 	// Storage: Token AccountInfoByTokenAndMember (r:2 w:2)
@@ -201,4 +205,8 @@ impl WeightInfo for () {
 	fn sell_on_amm() -> Weight {
 		0
 	}
+
+    fn update_governance_parameters() -> Weight {
+        0
+    }
 }
