@@ -42,7 +42,7 @@ use sp_runtime::{
 };
 use sp_std::collections::btree_map::BTreeMap;
 use sp_std::convert::TryInto;
-use sp_std::iter::{Iterator, Sum};
+use sp_std::iter::Iterator;
 use sp_std::vec;
 use sp_std::vec::Vec;
 use storage::UploadParameters;
@@ -2238,6 +2238,7 @@ impl<T: Config> Module<T> {
         supply_pre: TokenBalanceOf<T>,
         bond_operation: AmmOperation,
     ) -> Result<JoyBalanceOf<T>, DispatchError> {
+        use core::ops::Div;
         let amount_sq = amount
             .checked_mul(&amount)
             .ok_or(Error::<T>::ArithmeticError)?;

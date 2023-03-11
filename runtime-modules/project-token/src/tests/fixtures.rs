@@ -515,10 +515,10 @@ pub struct ActivateAmmFixture {
     member_id: MemberId,
 
     #[new(value = "AMM_CURVE_SLOPE")]
-    slope: Permill,
+    slope: Balance,
 
     #[new(value = "AMM_CURVE_INTERCEPT")]
-    intercept: Permill,
+    intercept: Balance,
 }
 
 impl Fixture for ActivateAmmFixture {

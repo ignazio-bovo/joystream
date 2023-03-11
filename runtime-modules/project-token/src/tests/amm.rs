@@ -3,7 +3,7 @@
 use crate::tests::fixtures::*;
 use crate::tests::mock::*;
 use crate::types::{AmmCurve, AmmOperation};
-use crate::{joy, last_event_eq, member, Error, RawEvent, RepayableBloatBondOf};
+use crate::{joy, last_event_eq, Error, RawEvent, RepayableBloatBondOf};
 use frame_support::traits::Currency;
 use frame_support::{assert_err, assert_ok};
 use sp_runtime::{traits::Zero, DispatchError, Permill};
@@ -243,9 +243,9 @@ fn amm_buy_ok_with_event_deposit() {
 #[test]
 fn amm_activation_fails_with_slope_parameter_too_low() {
     build_default_test_externalities_with_balances(vec![]).execute_with(|| {
-        IssueTokenFixture::default().execute_call().unwrap();
-        let result = ActivateAmmFixture::default()
-            .with_linear_function_params(Zero::zero(), AMM_CURVE_INTERCEPT)
+        IssueTokenFixture::new().execute_call().unwrap();
+        let result = ActivateAmmFixture::new()
+            .with_slope(Zero::zero())
             .execute_call();
 
         assert_err!(result, Error::<Test>::CurveSlopeParametersTooLow);
