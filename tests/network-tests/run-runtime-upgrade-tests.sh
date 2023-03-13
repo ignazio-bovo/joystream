@@ -146,7 +146,6 @@ function cleanup() {
     docker rm --volumes target-node
     docker-compose -f ../../docker-compose.yml down -v --remove-orphans
     docker volume prune -f # sometimes volumes are still running
-    # rm -rf ${DATA_PATH}
 }
 
 # entrypoint
@@ -183,7 +182,7 @@ function main {
     echo >&2 "mainnet node starting"
 
     # wait 1 minute
-    sleep 60
+    sleep 90
 
     trap cleanup EXIT
 
