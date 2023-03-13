@@ -2305,6 +2305,10 @@ declare module '@polkadot/api-base/types/errors' {
        **/
       CannotParticipateInSplitWithZeroAmount: AugmentedError<ApiType>;
       /**
+       * Curve slope parameters below minimum allowed
+       **/
+      CurveSlopeParametersTooLow: AugmentedError<ApiType>;
+      /**
        * Deadline constraint not satisfied
        **/
       DeadlineExpired: AugmentedError<ApiType>;
@@ -2453,6 +2457,7 @@ declare module '@polkadot/api-base/types/errors' {
        **/
       SlippageToleranceExceeded: AugmentedError<ApiType>;
       /**
+       * -------- Patronage --------------------------------------------------
        * Target Rate is higher than current patronage rate
        **/
       TargetPatronageRateIsHigherThanCurrentRate: AugmentedError<ApiType>;
@@ -2469,6 +2474,10 @@ declare module '@polkadot/api-base/types/errors' {
        **/
       TokenSymbolAlreadyInUse: AugmentedError<ApiType>;
       /**
+       * Transfer destination member id invalid
+       **/
+      TooManyTransferOutputs: AugmentedError<ApiType>;
+      /**
        * At least one of the transfer destinations is not an existing member id
        **/
       TransferDestinationMemberDoesNotExist: AugmentedError<ApiType>;
@@ -2480,6 +2489,10 @@ declare module '@polkadot/api-base/types/errors' {
        * User is not participating in any split
        **/
       UserNotParticipantingInAnySplit: AugmentedError<ApiType>;
+      /**
+       * Provided value for patronage is too big (yearly format)
+       **/
+      YearlyPatronageRateLimitExceeded: AugmentedError<ApiType>;
     };
     proposalsCodex: {
       /**
@@ -2570,6 +2583,10 @@ declare module '@polkadot/api-base/types/errors' {
        * Invalid working group budget capacity parameter
        **/
       InvalidWorkingGroupBudgetCapacity: AugmentedError<ApiType>;
+      /**
+       * Max yearly patronage rate cannot be zero
+       **/
+      MaxYearlyPatronageRateCannotBeZero: AugmentedError<ApiType>;
       /**
        * Require root origin in extrinsics
        **/
