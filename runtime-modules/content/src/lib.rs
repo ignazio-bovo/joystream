@@ -2995,6 +2995,20 @@ decl_module! {
             Self::deposit_event(RawEvent::ChannelOwnerRemarked(channel_id, msg));
         }
 
+        #[weight = WeightInfoContent::<T>::channel_owner_remark(to_kb(msg.len() as u32))]
+        pub fn creator_token_issuer_remark(origin, channel_id: T::ChannelId, msg: Vec<u8>) {
+            let sender = ensure_signed(origin)?;
+            let channel = Self::ensure_channel_exists(&channel_id)?;
+            ensure_is_authorized_to_issue_creator_token::<T>(&sender, &channel.owner)?;
+            let token_id = channel.ensure_creator_token_issued() ?;
+
+            //
+            // == MUTATION SAFE ==
+            //
+
+            Self::deposit_event(RawEvent::CreatorTokenIssuerRemark(token_id, msg));
+        }
+
         /// Channel collaborator remark
         /// <weight>
         ///
@@ -5026,5 +5040,6 @@ decl_event!(
         ToggledNftLimits(bool),
         // Creator tokens
         CreatorTokenIssued(ContentActor, ChannelId, TokenId),
+        CreatorTokenIssuerRemark(TokenId, Vec<u8>),
     }
 );
