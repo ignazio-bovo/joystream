@@ -16,9 +16,9 @@ message Benefit {
   optional string title = 1;
   optional string description = 2;
   optional string emoji = 3;
-  uint32 display_order = 4;
+  optional uint32 display_order = 4;
 }
 
 message Sale {
-  optional string terms_and_conditions = 1
+  optional string terms_and_conditions = 1;
 }
