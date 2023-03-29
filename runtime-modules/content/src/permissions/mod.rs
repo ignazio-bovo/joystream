@@ -735,3 +735,14 @@ pub fn ensure_actor_authorized_to_deactivate_amm<T: Config>(
     ensure_actor_has_channel_permissions::<T>(&sender, actor, channel, &required_permissions)?;
     Ok(sender)
 }
+
+pub fn ensure_actor_authorized_to_make_creator_token_remarks<T: Config>(
+    origin: T::Origin,
+    actor: &ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>,
+    channel: &Channel<T>,
+) -> Result<T::AccountId, DispatchError> {
+    let sender = ensure_signed(origin)?;
+    let required_permissions = vec![ChannelActionPermission::CreatorTokenRemarks];
+    ensure_actor_has_channel_permissions::<T>(&sender, actor, channel, &required_permissions)?;
+    Ok(sender)
+}

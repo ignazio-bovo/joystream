@@ -242,6 +242,8 @@ pub mod iterable_enums {
         /// - activate_amm
         /// - deactivate_amm
         AmmControl,
+        /// Allow remarks for passing metadata for creator token
+        CreatorTokenRemarks,
     }
 }
 

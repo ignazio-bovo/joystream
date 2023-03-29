@@ -2995,12 +2995,12 @@ decl_module! {
             Self::deposit_event(RawEvent::ChannelOwnerRemarked(channel_id, msg));
         }
 
-        #[weight = WeightInfoContent::<T>::channel_owner_remark(to_kb(msg.len() as u32))]
-        pub fn creator_token_issuer_remark(origin, channel_id: T::ChannelId, msg: Vec<u8>) {
-            let sender = ensure_signed(origin)?;
+        #[weight = WeightInfoContent::<T>::creator_token_issuer_remark(to_kb(msg.len() as u32))]
+        pub fn creator_token_issuer_remark(origin, actor: ContentActor<T::CuratorGroupId, T::CuratorId, T::MemberId>, channel_id: T::ChannelId, msg: Vec<u8>) {
+            ensure_signed(origin.clone()).map(|_| ())?;
             let channel = Self::ensure_channel_exists(&channel_id)?;
-            ensure_is_authorized_to_issue_creator_token::<T>(&sender, &channel.owner)?;
-            let token_id = channel.ensure_creator_token_issued() ?;
+            ensure_actor_authorized_to_make_creator_token_remarks::<T>(origin, &actor, &channel)?;
+            let token_id = channel.ensure_creator_token_issued::<T>()?;
 
             //
             // == MUTATION SAFE ==

@@ -117,6 +117,7 @@ pub trait WeightInfo {
 	fn pick_open_auction_winner() -> Weight;
 	fn make_open_auction_bid() -> Weight;
 	fn channel_owner_remark(_b: u32, ) -> Weight;
+	fn creator_token_issuer_remark(_b: u32, ) -> Weight;
 	fn channel_agent_remark(_b: u32, ) -> Weight;
 	fn nft_owner_remark(_b: u32, ) -> Weight;
 	fn update_channel_state_bloat_bond() -> Weight;
@@ -1233,6 +1234,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+
+    fn creator_token_issuer_remark(b: u32, ) -> Weight {
+        0 as Weight
+    }
 }
 
 // Default implementation for tests
@@ -1465,4 +1470,7 @@ impl WeightInfo for () {
 	fn update_video_state_bloat_bond() -> Weight {
 		0
 	}
+    fn creator_token_issuer_remark(b: u32, ) -> Weight {
+        0 
+    }
 }
