@@ -3006,7 +3006,7 @@ decl_module! {
             // == MUTATION SAFE ==
             //
 
-            Self::deposit_event(RawEvent::CreatorTokenIssuerRemark(token_id, msg));
+            Self::deposit_event(RawEvent::CreatorTokenIssuerRemarked(token_id, msg));
         }
 
         /// Channel collaborator remark
@@ -5040,6 +5040,6 @@ decl_event!(
         ToggledNftLimits(bool),
         // Creator tokens
         CreatorTokenIssued(ContentActor, ChannelId, TokenId),
-        CreatorTokenIssuerRemark(TokenId, Vec<u8>),
+        CreatorTokenIssuerRemarked(TokenId, Vec<u8>),
     }
 );
