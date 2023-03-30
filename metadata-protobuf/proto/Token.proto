@@ -19,6 +19,6 @@ message Benefit {
   optional uint32 display_order = 4;
 }
 
-message Sale {
+message SaleMetadata {
   optional string terms_and_conditions = 1;
 }
