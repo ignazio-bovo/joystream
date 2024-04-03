@@ -89,6 +89,14 @@ impl Get<&'static str> for StakingMigrationV11OldPallet {
     }
 }
 
+pub struct SetEraPayoutDampingFactorTo100Percent;
+impl OnRuntimeUpgrade for SetEraPayoutDampingFactorTo100Percent {
+    fn on_runtime_upgrade() -> Weight {
+        council::migrations::set_era_payout_damping_factor_to_one_hundred_percent::<Runtime>();
+        Weight::from_parts(10_000_000, 0)
+    }
+}
+
 /// Migrations to run on runtime upgrade.
 /// Migrations will run before pallet on_runtime_upgrade hooks
 /// Always include 'CancelActiveAndPendingProposals' as first migration
@@ -112,6 +120,7 @@ pub type Migrations = (
     pallet_election_provider_multi_phase::migrations::v1::MigrateToV1<Runtime>,
     pallet_grandpa::migrations::CleanupSetIdSessionMap<Runtime>,
     content::migrations::nara::MigrateToV1<Runtime>,
+    SetEraPayoutDampingFactorTo100Percent,
 );
 
 /// Executive: handles dispatch to the various modules with Migrations.

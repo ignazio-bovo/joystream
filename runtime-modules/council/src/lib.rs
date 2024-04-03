@@ -1929,3 +1929,11 @@ impl<T: Config> frame_support::traits::Hooks<T::BlockNumber> for Pallet<T> {
         Ok(())
     }
 }
+
+pub mod migrations {
+    use super::*;
+
+    pub fn set_era_payout_damping_factor_to_one_hundred_percent<T: Config>() {
+        Mutations::<T>::set_era_payout_damping_factor(Percent::from_percent(100));
+    }
+}
